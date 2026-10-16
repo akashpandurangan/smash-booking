@@ -1,0 +1,138 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-display: 'Bricolage Grotesque', 'Inter', system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Deep forest / charcoal */
+  --color-forest-950: #07140e;
+  --color-forest-900: #0c1f17;
+  --color-forest-800: #122d20;
+  --color-forest-700: #1b4230;
+  --color-forest-600: #27593f;
+  --color-forest-500: #3a7556;
+
+  /* Vibrant lime accent */
+  --color-volt-300: #dcf97f;
+  --color-volt-400: #c6f432;
+  --color-volt-500: #b2e01a;
+  --color-volt-700: #5d7a07;
+
+  /* Warm, light surfaces */
+  --color-paper: #f5f7f2;
+  --color-line: #e2e7dc;
+  --color-ink: #101a14;
+  --color-muted: #566259;
+
+  --shadow-card: 0 1px 2px rgb(12 31 23 / 0.04), 0 4px 14px -6px rgb(12 31 23 / 0.1);
+  --shadow-lift: 0 10px 30px -12px rgb(12 31 23 / 0.28);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-paper font-sans text-ink antialiased;
+    min-width: 320px;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tight;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-forest-600);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  .on-dark :focus-visible {
+    outline-color: var(--color-volt-400);
+  }
+  button:not(:disabled),
+  [role='button'] {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
+  }
+  .card {
+    @apply rounded-2xl border border-line bg-white shadow-card;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-ink;
+  }
+  .input {
+    @apply w-full rounded-xl border border-line bg-white px-3.5 py-3 text-base text-ink placeholder:text-muted/60 transition-colors;
+    @apply focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20;
+    @apply disabled:cursor-not-allowed disabled:bg-paper disabled:text-muted;
+  }
+  .input[aria-invalid='true'] {
+    @apply border-red-500 focus:border-red-500 focus:ring-red-500/20;
+  }
+  /* hatch pattern for blocked courts */
+  .hatch {
+    background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgb(86 98 89 / 0.1) 6px 7px);
+  }
+}
+
+/* Subtle micro-interactions */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.35s ease-out both;
+}
+@keyframes sheet {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sheet {
+  animation: sheet 0.25s ease-out both;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(90deg, #e9eee4 25%, #f3f6ef 50%, #e9eee4 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
