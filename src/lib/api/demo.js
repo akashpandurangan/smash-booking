@@ -2,7 +2,7 @@
 // see the same demo data; state is re-read before every call so tabs don't overwrite each other).
 // - No network, no real accounts, no real payments, no emails/SMS. Demo login accepts any password.
 // - Rules mirror supabase/migrations so behaviour matches the real backend.
-// - Storage is per-origin: a facility created on localhost is reachable at /f/<slug> on the same
+// - Storage is per-origin: a facility created on localhost is reachable at /book/<slug> on the same
 //   origin, but NOT at <slug>.localhost (a different origin has its own demo data).
 import { addDays, bookingSegments, toMin, todayISO, nowMinutes } from '../time.js'
 import { TRANSITIONS, ACTIVE_STATUSES } from '../status.js'

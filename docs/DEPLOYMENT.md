@@ -2,7 +2,7 @@
 
 One shared React app serves **everyone**: the platform (`smashbooking.com`), the owner dashboard, and every facility's booking site (`<slug>.smashbooking.com`). There is **no per-owner Vercel project and no per-owner deploy**. The browser decides which tenant to show from the hostname; the database decides whether that tenant is real, live and what it contains.
 
-> Nothing here claims a subdomain is live. Until you finish sections 3–4, owners are shown a **working link** (`https://<your-site>/f/<slug>`) and the dashboard says the branded subdomain is *not connected yet*.
+> Nothing here claims a subdomain is live. Until you finish sections 3–4, owners are shown a **working link** (`https://<your-site>/book/<slug>`) and the dashboard says the branded subdomain is *not connected yet*.
 
 ## 0. How tenant routing works
 
@@ -11,8 +11,8 @@ One shared React app serves **everyone**: the platform (`smashbooking.com`), the
 | `smashbooking.com`, `www.`, `app.` | platform | landing page, `/owner/*`, `/platform/*` |
 | `smasharena.smashbooking.com` | host | Smash Arena's booking site |
 | `smasharena.localhost:5173` | host | same, for local development (browsers resolve `*.localhost` to your machine) |
-| `<any domain>/f/smasharena` | path | same site, **no DNS needed** — works today on `smash-booking-pink.vercel.app` |
-| `<any domain>/?facility=smasharena` | dev shortcut | redirects to `/f/smasharena` |
+| `<any domain>/book/smasharena` | path | same site, **no DNS needed** — works today on `smash-booking-pink.vercel.app` |
+| `<any domain>/?facility=smasharena` | dev shortcut | redirects to `/book/smasharena` |
 
 The slug is only a lookup key. `get_facility_public(slug)` returns the facility only if it exists and is `active` (members/platform admins can also preview drafts). Booking RPCs take the **slug**, not an id, and re-derive the facility server-side; every court id is checked to belong to it. Unknown slugs get a clear "page doesn't exist" screen; pending/suspended facilities cannot accept bookings (enforced in the database, not just the UI).
 
@@ -66,7 +66,7 @@ Leave the Supabase variables empty to run in **demo mode** (local sample data, p
 
 1. Push this branch to GitHub and import/redeploy the project (framework: Vite, build `npm run build`, output `dist` — also set in `vercel.json`).
 2. Add the env vars above (Settings → Environment Variables) and redeploy.
-3. **Test now, without the domain:** open `https://smash-booking-pink.vercel.app/` (platform) and `https://smash-booking-pink.vercel.app/f/<slug>` (a facility). The whole product works this way.
+3. **Test now, without the domain:** open `https://smash-booking-pink.vercel.app/` (platform) and `https://smash-booking-pink.vercel.app/book/<slug>` (a facility). The whole product works this way.
 
 ## 4. Connect `smashbooking.com` + wildcard subdomains
 
@@ -106,7 +106,7 @@ npm install
 npm run dev                       # http://localhost:5173
 ```
 - Platform: `http://localhost:5173/`
-- A facility, three ways: `http://localhost:5173/f/smasharena` · `http://smasharena.localhost:5173/` · `http://localhost:5173/?facility=smasharena`
+- A facility, three ways: `http://localhost:5173/book/smasharena` · `http://smasharena.localhost:5173/` · `http://localhost:5173/?facility=smasharena`
 - Demo logins: `/owner/login` has **Demo owner** and **Demo platform admin**; facility sites have "Continue as demo player".
 - Demo data is stored in `localStorage` for the origin and shared across tabs; `smasharena.localhost` is a different origin with its own demo data. "Reset demo" restores the samples.
 
@@ -121,7 +121,7 @@ Tests (no Supabase needed): `npm test` runs the slug unit tests and ~85 SQL chec
 - [ ] `select * from facility_payment_config` as a logged-in user fails (permission denied).
 
 **Subdomain routing**
-- [ ] `/f/<slug>` shows only that facility's name, courts, prices, hours, durations.
+- [ ] `/book/<slug>` (and the older `/f/<slug>`) shows only that facility's name, courts, prices, hours, durations.
 - [ ] Unknown slug → "This booking page doesn't exist". Pending → "isn't live yet". Suspended → "Bookings are paused".
 - [ ] After section 4: `https://<slug>.smashbooking.com` and `https://www.smashbooking.com` behave as described; `/owner` on a facility subdomain is *not* the dashboard.
 - [ ] Duplicate / reserved / invalid addresses are refused in the wizard.

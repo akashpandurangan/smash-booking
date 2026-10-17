@@ -4,8 +4,9 @@ import { isDemo } from './config.js'
 //
 //   smasharena.smashbooking.com   → mode 'host'     slug 'smasharena'   (production)
 //   smasharena.localhost:5173     → mode 'host'     slug 'smasharena'   (local dev, no DNS needed)
-//   <anything>/f/smasharena/...   → mode 'path'     slug 'smasharena'   (works on the existing
-//                                                    *.vercel.app domain and on plain localhost)
+//   <anything>/book/smasharena/.. → mode 'path'     slug 'smasharena'   (works on the existing
+//                                                    *.vercel.app domain and on plain localhost;
+//                                                    the older /f/<slug> form keeps working)
 //   smashbooking.com / www / app  → mode 'platform'  (marketing site, owner dashboard, platform admin)
 //
 // The slug is only a LOOKUP KEY. The database resolves it to a facility, decides whether it is live,
@@ -31,10 +32,10 @@ export function resolveTenant(loc) {
     }
   }
 
-  const m = loc.pathname.match(/^\/f\/([^/]+)/i)
+  const m = loc.pathname.match(/^\/(book|f)\/([^/]+)/i)
   if (m) {
-    const slug = decodeURIComponent(m[1]).toLowerCase()
-    return { mode: 'path', slug: SLUG_RE.test(slug) ? slug : '', basename: `/f/${m[1]}` }
+    const slug = decodeURIComponent(m[2]).toLowerCase()
+    return { mode: 'path', slug: SLUG_RE.test(slug) ? slug : '', basename: `/${m[1]}/${m[2]}` }
   }
   return { mode: 'platform', slug: null, basename: '' }
 }
@@ -43,7 +44,7 @@ export function resolveTenant(loc) {
 function redirectQueryFallback() {
   const q = new URLSearchParams(window.location.search).get('facility')
   if (q && SLUG_RE.test(q.toLowerCase()) && resolveTenant(window.location).mode === 'platform') {
-    window.location.replace(`/f/${q.toLowerCase()}`)
+    window.location.replace(`/book/${q.toLowerCase()}`)
     return true
   }
   return false
@@ -56,8 +57,8 @@ export const isTenantSite = TENANT.mode !== 'platform'
 const origin = () => window.location.origin
 const isLocalHost = () => /(^|\.)localhost$/.test(window.location.hostname)
 
-/** Link that works RIGHT NOW (no custom domain needed): /f/<slug> on the current origin. */
-export const workingUrl = (slug) => `${origin()}/f/${slug}`
+/** Link that works RIGHT NOW (no custom domain needed): /book/<slug> on the current origin. */
+export const workingUrl = (slug) => `${origin()}/book/${slug}`
 /** The branded subdomain URL (only live once DNS + Vercel are configured). */
 export function subdomainUrl(slug) {
   if (isLocalHost()) return `${window.location.protocol}//${slug}.localhost${window.location.port ? `:${window.location.port}` : ''}`

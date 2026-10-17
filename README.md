@@ -13,7 +13,7 @@ A platform where **each facility owner registers, sets up their courts, and auto
 | Setup wizard | `/owner/setup` | facility → web address (auto-slug + suggestions) → courts → hours/durations/pricing/days off → payments → review & activate |
 | Owner dashboard | `/owner/*` | overview, bookings, calendar, courts & blocks, payments, booking page (link, subdomain status, branding), settings, activity log |
 | Platform admin | `/platform/*` | all facilities/owners, approve · suspend · reactivate, address changes, limits, usage metrics, platform settings |
-| Facility booking site | `<slug>.<root domain>` or `/f/<slug>` | the player experience (date → duration → time → court → pay), per-facility data, prices, hours, branding |
+| Facility booking site | `<slug>.<root domain>` or `/book/<slug>` | the player experience (date → duration → time → court → pay), per-facility data, prices, hours, branding |
 
 ## Run it (₹0, no setup) — demo mode
 
@@ -23,13 +23,13 @@ npm run dev        # http://localhost:5173
 ```
 No `.env.local` → **demo mode** (amber banner): local sample facilities (**Smash Arena**, **Green Shuttle Club**), pretend payments, nothing leaves your browser.
 - Platform: <http://localhost:5173/> — `/owner/login` has *Demo owner* and *Demo platform admin*; or register a new owner and run the wizard.
-- Facility sites: <http://localhost:5173/f/smasharena> · <http://smasharena.localhost:5173/> (real hostname routing, no DNS) · `/?facility=smasharena`.
+- Facility sites: <http://localhost:5173/book/smasharena> · <http://smasharena.localhost:5173/> (real hostname routing, no DNS) · `/?facility=smasharena`.
 
 ## Production
 
 Everything is in **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**: Supabase setup and migrations, the first platform administrator, env vars, Vercel + wildcard DNS (`*.smashbooking.com`), per-facility Razorpay, local testing and the verification checklist.
 
-Short version: run migrations `0001`–`0006`, deploy the 4 Edge Functions, set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` / `VITE_ROOT_DOMAIN`, deploy to Vercel (`vercel.json` handles routing). **Test today on your existing `*.vercel.app` URL with `/f/<slug>` links.** Add `smashbooking.com` + `*.smashbooking.com` in Vercel when you own the domain, then set `VITE_WILDCARD_DOMAIN_READY=true`.
+Short version: run migrations `0001`–`0006`, deploy the 4 Edge Functions, set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` / `VITE_ROOT_DOMAIN`, deploy to Vercel (`vercel.json` handles routing). **Test today on your existing `*.vercel.app` URL with `/book/<slug>` links.** Add `smashbooking.com` + `*.smashbooking.com` in Vercel when you own the domain, then set `VITE_WILDCARD_DOMAIN_READY=true`.
 
 ## Security model (summary)
 

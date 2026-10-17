@@ -3,23 +3,21 @@ import { CheckCircle2, Clock, Globe, MessageCircle, ShieldAlert } from 'lucide-r
 import { useFacility, useToast } from '../../context/contexts.js'
 import { api } from '../../lib/api/index.js'
 import { friendlyError } from '../../lib/errors.js'
-import { FACILITY_STATUS } from '../../lib/status.js'
 import { ROOT_DOMAIN, WILDCARD_READY, bookingUrl, subdomainUrl, workingUrl } from '../../lib/tenant.js'
-import { Alert, Badge, Button, Field } from '../../components/ui.jsx'
-import LinkActions from '../../components/LinkActions.jsx'
+import { Alert, Button, Field } from '../../components/ui.jsx'
+import BookingLinkCard from '../../components/BookingLinkCard.jsx'
 import { LOGO_URL } from '../../lib/config.js'
 import { useAdmin } from './OwnerLayout.jsx'
 
 /** The facility's public link, subdomain status and branding. */
 export default function BookingPagePage() {
-  const { settings } = useFacility()
+  const { settings, courts } = useFacility()
   const { reloadFacility } = useAdmin()
   const toast = useToast()
   const [b, setB] = useState({ logoUrl: settings.logoUrl, tagline: settings.tagline })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const url = bookingUrl(settings.slug)
-  const st = FACILITY_STATUS[settings.status]
   const live = settings.status === 'active'
   const brandedLive = live && WILDCARD_READY
 
@@ -35,13 +33,11 @@ export default function BookingPagePage() {
     <div className="space-y-6">
       <div><h1 className="text-3xl font-extrabold">Booking page</h1><p className="text-muted">Your public booking website: link, status and branding.</p></div>
 
-      <section className="card p-5 sm:p-6" aria-label="Booking link">
-        <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm text-muted">Your booking link</p><Badge tone={st.tone}>{st.label}</Badge></div>
-        <p className="mt-1 break-all font-display text-2xl font-extrabold">{url}</p>
-        <LinkActions className="mt-4" url={url} previewUrl={workingUrl(settings.slug)} name={settings.name} />
-        <a className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-forest-600 hover:underline" target="_blank" rel="noreferrer"
+      <BookingLinkCard settings={settings} courts={courts} />
+      {settings.status === 'active' && (
+        <a className="-mt-3 inline-flex items-center gap-2 text-sm font-semibold text-forest-600 hover:underline" target="_blank" rel="noreferrer"
           href={`https://wa.me/?text=${encodeURIComponent(`Book a badminton court at ${settings.name}: ${url}`)}`}><MessageCircle className="size-4" aria-hidden />Share on WhatsApp</a>
-      </section>
+      )}
 
       <section className="card p-5 sm:p-6" aria-labelledby="sub-h">
         <h2 id="sub-h" className="flex items-center gap-2 text-lg font-bold"><Globe className="size-5" aria-hidden />Web address status</h2>

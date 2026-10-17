@@ -7,8 +7,7 @@ import { bookingMinutes, fmtDate, fmtSegments, generateSlots, money, todayISO } 
 import { ACTIVE_STATUSES, PAYMENT_STATUS } from '../../lib/status.js'
 import { Badge, EmptyState, Skeleton, Stat, StatusBadge } from '../../components/ui.jsx'
 import BookingModal from './BookingModal.jsx'
-import LinkActions from '../../components/LinkActions.jsx'
-import { bookingUrl, workingUrl } from '../../lib/tenant.js'
+import BookingLinkCard from '../../components/BookingLinkCard.jsx'
 
 const courtsText = (b) => `Court${b.courtNumbers.length > 1 ? 's' : ''} ${b.courtNumbers.join(', ')}`
 
@@ -58,11 +57,7 @@ export default function OverviewPage() {
         <p className="text-muted">{fmtDate(m.today, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
       </div>
 
-      <section className="card p-4 sm:p-5" aria-label="Your booking link">
-        <p className="text-sm text-muted">Your booking link</p>
-        <p className="mt-0.5 break-all font-display text-xl font-bold">{bookingUrl(settings.slug)}</p>
-        <LinkActions className="mt-3" url={bookingUrl(settings.slug)} previewUrl={workingUrl(settings.slug)} name={settings.name} />
-      </section>
+      <BookingLinkCard settings={settings} courts={courts} />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
         <Stat icon={CalendarClock} label="Today’s bookings" value={m.todays.length} hint="Active bookings today" />

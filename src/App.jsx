@@ -93,7 +93,7 @@ function PlatformRoutes() {
 }
 
 export default function App() {
-  if (REDIRECTING) return null // ?facility=slug → /f/slug
+  if (REDIRECTING) return null // ?facility=slug → /book/slug
   return (
     <BrowserRouter basename={TENANT.basename}>
       <ToastProvider>
