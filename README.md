@@ -1,4 +1,4 @@
-# Smash Court — badminton court booking
+# Smash Booking — badminton court booking
 
 Mobile-first booking site for a facility with 3 courts. A booking is **any set of 30-minute slots (consecutive or not) on one or more courts**, paid online with **Razorpay**, and confirmed only after the payment is verified on the server.
 

@@ -14,4 +14,4 @@ export const supabaseAnonKey = anonKey
 
 // Optional: a hero photo URL you have the right to use (e.g. your own court photo placed in /public).
 export const HERO_IMAGE_URL = ''
-export const LOGO_TEXT = 'SC' // placeholder logo mark — replace with your own <img> in Header.jsx
+export const LOGO_URL = '/logo.png' // brand mark (public/logo.png)

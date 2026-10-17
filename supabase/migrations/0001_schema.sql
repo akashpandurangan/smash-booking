@@ -46,7 +46,7 @@ $$;
 -- ---------------------------------------------------------------------
 create table public.facility_settings (
   id                    int primary key default 1 check (id = 1),
-  name                  text not null default 'Smash Court',
+  name                  text not null default 'Smash Booking',
   tagline               text not null default 'Your Court. Your Game.',
   address               text not null default 'Your address here',
   contact_phone         text,

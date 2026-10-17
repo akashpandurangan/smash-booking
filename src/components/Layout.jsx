@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { CalendarDays, ChevronDown, LayoutDashboard, LogOut, Ticket, User, FlaskConical, RotateCcw, MapPin, Clock, Phone, Mail } from 'lucide-react'
 import { useAuth, useFacility } from '../context/contexts.js'
 import { api } from '../lib/api/index.js'
-import { isDemo, LOGO_TEXT } from '../lib/config.js'
+import { isDemo, LOGO_URL } from '../lib/config.js'
 import { fmt12 } from '../lib/time.js'
 
 function DemoBanner() {
@@ -84,7 +84,7 @@ export function Header() {
     <header className="on-dark sticky top-0 z-30 bg-forest-900 text-white">
       <div className="container-page flex h-16 items-center gap-6">
         <Link to="/" className="flex items-center gap-3" aria-label={`${settings?.name || 'Home'} — home`}>
-          <span className="grid size-9 place-items-center rounded-xl bg-volt-400 font-display text-sm font-extrabold text-forest-950">{LOGO_TEXT}</span>
+          <img src={LOGO_URL} alt="" width="36" height="36" className="size-9 rounded-xl" />
           <span className="font-display text-lg font-bold tracking-tight">{settings?.name || 'Court Booking'}</span>
         </Link>
         <nav className="ml-4 hidden items-center gap-1 sm:flex" aria-label="Main">

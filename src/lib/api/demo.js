@@ -5,7 +5,7 @@
 import { addDays, bookingSegments, toMin, todayISO, nowMinutes } from '../time.js'
 import { TRANSITIONS, ACTIVE_STATUSES } from '../status.js'
 
-const KEY = 'badminton-demo-v3'
+const KEY = 'badminton-demo-v4'
 const wait = (ms = 220) => new Promise((r) => setTimeout(r, ms))
 const uid = () => crypto.randomUUID()
 const fail = (code) => {
@@ -13,7 +13,7 @@ const fail = (code) => {
 }
 
 const DEFAULT_SETTINGS = {
-  name: 'Smash Court',
+  name: 'Smash Booking',
   tagline: 'Your Court. Your Game.',
   address: 'Your address here (set in Owner → Settings)',
   contactPhone: '',
