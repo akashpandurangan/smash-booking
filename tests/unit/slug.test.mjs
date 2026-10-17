@@ -1,0 +1,27 @@
+import { slugify, slugCandidates, isValidSlug, cleanSlugInput } from '../../src/lib/slug.js'
+let fails = 0
+const eq = (a, b, m) => { const ok = JSON.stringify(a) === JSON.stringify(b); console.log(ok ? '  ✓' : '  ✗ FAIL', m, ok ? '' : `→ got ${JSON.stringify(a)} expected ${JSON.stringify(b)}`); if (!ok) fails++ }
+
+eq(slugify('Smash Arena'), 'smasharena', '"Smash Arena" → smasharena (spec example)')
+eq(slugify('Green Shuttle Club'), 'greenshuttle', '"Green Shuttle Club" → greenshuttle (spec example)')
+eq(slugify('Power Play Courts'), 'powerplay', '"Power Play Courts" → powerplay (spec example)')
+eq(slugify("Raj's  Badminton Academy!!"), 'rajsbadminton', 'apostrophes + punctuation removed, trailing "Academy" dropped')
+eq(slugify('Café Müller Sports Centre'), 'cafemullersports', 'accents normalised, trailing "Centre" dropped')
+eq(slugify('Badminton Club'), 'badminton', 'trailing Club dropped')
+eq(slugify('Club'), 'club', 'a lone generic word is kept')
+eq(slugify('Court Kings Club'), 'courtkings', 'leading "Court" is kept (only trailing words are dropped)')
+eq(slugify('The Smash Arena'), 'smasharena', 'leading "The" dropped')
+eq(slugify('  --  '), '', 'garbage → empty')
+eq(slugify('A'.repeat(80)).length, 30, 'length capped')
+const c = slugCandidates('Smash Arena', 'Chennai')
+eq(c[0], 'smasharena', 'first candidate is the preferred slug')
+eq(c[1], 'smasharena-chennai', 'second candidate adds the city (spec example)')
+eq(c.every(isValidSlug), true, 'every candidate is a valid slug')
+eq(new Set(c).size, c.length, 'candidates are unique')
+eq(isValidSlug('ab'), false, '2-char slug invalid')
+eq(isValidSlug('a--b'), false, 'double hyphen invalid')
+eq(isValidSlug('-abc'), false, 'leading hyphen invalid')
+eq(isValidSlug('green-shuttle'), true, 'hyphenated slug valid')
+eq(cleanSlugInput('Smash Arena!!'), 'smasharena', 'typed input is cleaned live')
+console.log(fails ? `${fails} FAILED` : 'ALL SLUG CHECKS PASSED')
+process.exit(fails ? 1 : 0)

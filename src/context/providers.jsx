@@ -27,8 +27,8 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       loading,
-      // UI hint only. Every owner action is re-checked server-side by RLS / is_owner().
-      isOwner: user?.role === 'owner',
+      // UI hint only. Platform-admin actions are re-checked server-side (platform_admins allow-list).
+      isPlatformAdmin: !!user?.isPlatformAdmin,
       signIn: async (email, password) => {
         await api.auth.signIn(email, password)
         setUser(await api.auth.getUser())
@@ -47,14 +47,15 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+/** Tenant site only: loads the facility for the current hostname (never trusts an id from the URL). */
 export function FacilityProvider({ children }) {
-  const [state, setState] = useState({ settings: null, courts: [], loading: true, error: null })
+  const [state, setState] = useState({ settings: null, courts: [], tenantState: 'loading', loading: true, error: null })
 
   const reload = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }))
     try {
-      const { settings, courts } = await api.getFacility()
-      setState({ settings, courts, loading: false, error: null })
+      const r = await api.getFacility()
+      setState({ settings: r.settings || null, courts: r.courts || [], tenantState: r.state, loading: false, error: null })
     } catch (e) {
       setState((s) => ({ ...s, loading: false, error: friendlyError(e) }))
     }

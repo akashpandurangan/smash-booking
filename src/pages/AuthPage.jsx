@@ -66,7 +66,7 @@ export default function AuthPage() {
 
   const demoLogin = async (role) => {
     await quickLogin(role)
-    nav(role === 'owner' ? '/admin' : next, { replace: true })
+    nav(next, { replace: true })
   }
 
   if (done) {
@@ -103,8 +103,7 @@ export default function AuthPage() {
           <p className="flex items-center gap-2 text-sm font-bold text-amber-900"><FlaskConical className="size-4" aria-hidden />Demo mode — no real accounts</p>
           <p className="mt-1 text-sm text-amber-900/80">Skip the form and explore with a pretend account. Nothing is sent anywhere.</p>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <Button variant="dark" size="sm" onClick={() => demoLogin('customer')}>Demo customer</Button>
-            <Button variant="outline" size="sm" onClick={() => demoLogin('owner')}>Demo owner</Button>
+            <Button variant="dark" size="sm" className="col-span-2" onClick={() => demoLogin('customer')}>Continue as demo player</Button>
           </div>
         </div>
       )}

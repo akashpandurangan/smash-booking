@@ -60,8 +60,9 @@ export default function PaymentPage() {
 
   const holdLeft = b.expiresAt ? new Date(b.expiresAt) - Date.now() : null
   const expired = b.status === 'expired' || (b.status === 'pending_payment' && holdLeft !== null && holdLeft <= 0)
-  const mode = api.payment.mode // 'razorpay' | 'demo'
-  // Outside local demo mode the test payment only works if the owner switched it on.
+  // Each facility has its OWN payment setup: Razorpay when the owner connected it (real backend only),
+  // otherwise the demo payment — which a real facility must explicitly allow (test mode).
+  const mode = !isDemo && settings.paymentMode === 'razorpay' ? 'razorpay' : 'demo'
   const demoBlocked = mode === 'demo' && !isDemo && !settings.allowDemoPayments
 
   const pay = async () => {
@@ -157,10 +158,10 @@ export default function PaymentPage() {
           {mode === 'demo' && (
             <Alert tone="info" className="mt-4" title={<span className="inline-flex items-center gap-1.5"><FlaskConical className="size-4" aria-hidden />Demo payment — no real money</span>}>
               {isDemo
-                ? 'Razorpay isn’t configured, so this is a pretend payment. Nothing is charged and no gateway is contacted.'
+                ? 'Demo mode: this is a pretend payment. Nothing is charged and no gateway is contacted.'
                 : demoBlocked
-                  ? 'Online payment isn’t set up yet. Please contact the facility to complete this booking.'
-                  : 'Razorpay isn’t configured. The owner has enabled test payments, so this confirms without charging anything.'}
+                  ? 'This facility hasn’t set up online payment yet. Please contact them to complete this booking.'
+                  : 'This facility has not connected online payments. The owner enabled test payments, so this confirms without charging anything.'}
             </Alert>
           )}
           {payError && <Alert tone="error" className="mt-4">{payError}</Alert>}

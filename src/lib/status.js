@@ -14,6 +14,13 @@ export const PAYMENT_STATUS = {
   refunded: { label: 'Refunded', tone: 'slate' },
 }
 
+export const FACILITY_STATUS = {
+  draft: { label: 'Draft', tone: 'slate' },
+  pending: { label: 'Awaiting approval', tone: 'amber' },
+  active: { label: 'Live', tone: 'green' },
+  suspended: { label: 'Suspended', tone: 'red' },
+}
+
 export const TRANSITIONS = {
   pending_payment: ['confirmed', 'cancelled', 'expired'],
   confirmed: ['cancelled'],

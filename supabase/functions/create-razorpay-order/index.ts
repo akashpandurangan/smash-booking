@@ -1,13 +1,10 @@
-// Creates a Razorpay order for one of the caller's pending orders.
-// The AMOUNT always comes from our database, never from the browser.
-import { basicAuth, cors, json, razorpayCreds, requireUser, serviceClient } from '../_shared/razorpay.ts'
+// Creates a Razorpay order for one of the caller's pending orders, using THE ORDER'S FACILITY's
+// Razorpay account. The AMOUNT always comes from our database, never from the browser.
+import { basicAuth, cors, facilityCreds, json, requireUser, serviceClient } from '../_shared/razorpay.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
-    const creds = razorpayCreds()
-    if (!creds) return json({ error: 'razorpay_not_configured' }, 503)
-
     const user = await requireUser(req)
     if (!user) return json({ error: 'not_authenticated' }, 401)
 
@@ -18,6 +15,9 @@ Deno.serve(async (req) => {
     if (order.status !== 'pending_payment') return json({ error: 'booking_not_payable' }, 409)
     if (order.expires_at && new Date(order.expires_at) < new Date()) return json({ error: 'hold_expired' }, 409)
 
+    const creds = await facilityCreds(db, order.facility_id)
+    if (!creds) return json({ error: 'razorpay_not_configured' }, 503)
+
     const amount = Math.round(Number(order.total_amount) * 100) // paise
     if (order.razorpay_order_id) {
       return json({ keyId: creds.keyId, razorpayOrderId: order.razorpay_order_id, amount, currency: 'INR' })
@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     const res = await fetch('https://api.razorpay.com/v1/orders', {
       method: 'POST',
       headers: { Authorization: basicAuth(creds), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount, currency: 'INR', receipt: order.reference, notes: { order_id: order.id } }),
+      body: JSON.stringify({ amount, currency: 'INR', receipt: order.reference, notes: { order_id: order.id, facility_id: order.facility_id } }),
     })
     const rz = await res.json()
     if (!res.ok) return json({ error: 'razorpay_error', detail: rz?.error?.description }, 502)

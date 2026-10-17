@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, Check, Clock3, X, Circle, Share2 } from 'lucide-react'
 import { useToast } from '../context/contexts.js'
+import { TENANT } from '../lib/tenant.js'
 import { Badge, StatusBadge } from './ui.jsx'
 import { timelineFor } from '../lib/status.js'
 import { bookingMinutes, fmtDate, fmtDateTime, fmtDuration, fmtSegments, money } from '../lib/time.js'
@@ -86,7 +87,7 @@ export function ShareBooking({ booking: b, facilityName, className = '' }) {
   const share = async () => {
     const courts = `Court${b.courtNumbers.length > 1 ? 's' : ''} ${b.courtNumbers.join(', ')}`
     const text = `${facilityName} — ${courts}\n${fmtDate(b.date, { weekday: 'long', day: 'numeric', month: 'long' })}, ${fmtSegments(b)} (${fmtDuration(bookingMinutes(b))})\nBooking ref: ${b.reference}`
-    const url = `${window.location.origin}/`
+    const url = `${window.location.origin}${TENANT.basename}/`
     if (navigator.share) {
       try {
         await navigator.share({ title: `${facilityName} booking`, text, url })
