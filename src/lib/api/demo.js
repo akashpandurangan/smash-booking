@@ -5,7 +5,7 @@
 import { addDays, bookingSegments, toMin, todayISO, nowMinutes } from '../time.js'
 import { TRANSITIONS, ACTIVE_STATUSES } from '../status.js'
 
-const KEY = 'badminton-demo-v2'
+const KEY = 'badminton-demo-v3'
 const wait = (ms = 220) => new Promise((r) => setTimeout(r, ms))
 const uid = () => crypto.randomUUID()
 const fail = (code) => {
@@ -21,7 +21,7 @@ const DEFAULT_SETTINGS = {
   openingTime: '06:00',
   closingTime: '22:00',
   slotMinutes: 30,
-  maxSlotsPerBooking: 4,
+  maxSlotsPerBooking: 8,
   pricePerSlot: 150,
   maxUnpaidHolds: 2,
   holdMinutes: 15,

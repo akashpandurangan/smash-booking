@@ -18,16 +18,18 @@ With no `.env.local` the app runs in **Demo mode** (amber banner on every page):
 
 ## Booking rules
 - Dates: today + next 13 days (14 total). 7-day strip, calendar icon for the rest. Past/out-of-window dates are disabled.
-- Time: tap any 30-minute slots — they don't have to be adjacent (e.g. 2:00 PM and 5:00 PM). Selected slots show a check badge; tap again to remove one. Limit: *Max slots per booking* (Owner → Settings, default 4). Past slots are hidden on today's date. A slot is disabled ("Not available") only when **no** court can take it. Up to 6 slots per row on desktop (4 tablet, 3 phone).
-- A sticky bottom bar shows total duration, From/To (or each separate range), selected courts and the total, live.
-- "Pick your court" is always visible. The first free court (Court 1 → 2 → 3) is pre-selected; pick as many as you like (at least one is required). Each chosen court must be free for **every** selected slot. Total = price × slots × courts.
+- Duration: choose 1, 2, 3 or 4 hours (needs *Max slots per booking* ≥ 8 — set to 8 by migration `0005`). Time slots are shown as 1-hour windows ("7:00–8:00 PM"); on phones they sit in one swipeable row, on desktop up to 6 per row. Past windows are hidden for today.
+- Picking a start window auto-selects the following consecutive hours (2 Hours from 7:00 PM → 7–8 PM and 8–9 PM). Changing the duration or start re-syncs the selection. If any required hour is unavailable, runs past closing time, or no single court is free for the whole period, a clear message appears and **Confirm Booking** stays disabled.
+- Pricing is still per 30-minute slot: price × slots × courts (e.g. ₹150 × 4 × 1 court = ₹600 for 2 hours).
+- A sticky bottom bar shows the duration, From/To, selected courts and the total, live.
+- "Pick your court" is always visible (swipeable cards on phones). The first free court (Court 1 → 2 → 3) is pre-selected; pick as many as you like (at least one is required). Each chosen court must be free for the **whole** period.
 - Guests can browse and select freely. **Confirm Booking** asks them to log in with email + password only; after login, checkout uses the name and mobile already on the account and asks only for what's missing (email is never asked again; an Edit link is available). The selection is kept through login and email verification, and availability is re-checked.
 - All selected courts are reserved **atomically**: if any one is taken, nothing is reserved. Unpaid holds expire after `hold_minutes` (default 15).
 - The confirmation screen has a share icon (native share sheet, or copies the details + link).
 
 ## Connect Supabase
 1. Create a free project at supabase.com.
-2. SQL editor → run, in order: `supabase/migrations/0001_schema.sql`, `supabase/migrations/0002_orders_razorpay.sql`, `supabase/migrations/0003_multi_slot.sql`, `supabase/migrations/0004_segments.sql`, `supabase/seed.sql`.
+2. SQL editor → run, in order: `supabase/migrations/0001_schema.sql`, `supabase/migrations/0002_orders_razorpay.sql`, `supabase/migrations/0003_multi_slot.sql`, `supabase/migrations/0004_segments.sql`, `supabase/migrations/0005_max_slots_8.sql`, `supabase/seed.sql`.
 3. Auth → URL Configuration: add your site URL (`http://localhost:5173`, plus production) and the `/auth/reset` and `/continue` redirects (`/continue` is where the email-verification link lands and resumes a saved booking). Keep email confirmation on.
 4. `.env.local` (copy `.env.example`): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
 5. Sign up, verify email, then in SQL: `update public.profiles set role = 'owner' where email = 'you@example.com';`
@@ -68,7 +70,7 @@ Overview (today, awaiting payment, confirmed, verified online payments, slot usa
 
 ## Layout
 ```
-supabase/migrations/        0001 schema · 0002 orders + Razorpay · 0003 multi-slot · 0004 separate time ranges
+supabase/migrations/        0001 schema · 0002 orders + Razorpay · 0003 multi-slot · 0004 separate time ranges · 0005 max 8 slots
 supabase/functions/         create-razorpay-order · verify-razorpay-payment · razorpay-webhook
 src/lib/api/                demo.js / supabase.js behind one `api`
 src/pages/ , src/pages/admin/

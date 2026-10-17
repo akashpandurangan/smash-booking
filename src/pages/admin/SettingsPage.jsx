@@ -65,7 +65,7 @@ export default function SettingsPage() {
       <Group title="Hours & holds" note="Time slots are 30 minutes and are generated from the opening and closing times. Customers can book several consecutive slots.">
         <Field label="Opening time"><input className="input" type="time" step="1800" value={f.openingTime} onChange={set('openingTime')} /></Field>
         <Field label="Closing time" error={errors.closingTime}><input className="input" type="time" step="1800" value={f.closingTime} onChange={set('closingTime')} /></Field>
-        <Field label="Max consecutive slots per booking" hint="Each slot is 30 minutes (4 = up to 2 hours)."><input className="input" type="number" min="1" max="24" value={f.maxSlotsPerBooking} onChange={num('maxSlotsPerBooking')} /></Field>
+        <Field label="Max consecutive slots per booking" hint="Each slot is 30 minutes. Use 8 or more to allow 4-hour bookings."><input className="input" type="number" min="1" max="24" value={f.maxSlotsPerBooking} onChange={num('maxSlotsPerBooking')} /></Field>
         <Field label="Bookable days (incl. today)" hint="Customers can book today plus the following days. Max 14."><input className="input" type="number" min="1" max="14" value={f.advanceBookingDays} onChange={num('advanceBookingDays')} /></Field>
         <Field label="Unpaid hold (minutes)" hint="Courts are released if payment isn’t completed in this time."><input className="input" type="number" min="5" max="1440" value={f.holdMinutes} onChange={num('holdMinutes')} /></Field>
         <Field label="Max unpaid holds per customer"><input className="input" type="number" min="1" max="10" value={f.maxUnpaidHolds} onChange={num('maxUnpaidHolds')} /></Field>
