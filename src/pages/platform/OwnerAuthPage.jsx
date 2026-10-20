@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Building2, FlaskConical, MailCheck } from 'lucide-react'
 import { useAuth } from '../../context/contexts.js'
 import { friendlyError } from '../../lib/errors.js'
-import { isDemo } from '../../lib/config.js'
+import { demoHint, isDemo } from '../../lib/config.js'
 import { Alert, Button, Field } from '../../components/ui.jsx'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -101,6 +101,7 @@ export default function OwnerAuthPage({ initialMode = 'login' }) {
       {isDemo && (
         <div className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4">
           <p className="flex items-center gap-2 text-sm font-bold text-amber-900"><FlaskConical className="size-4" aria-hidden />Demo mode — no real accounts</p>
+          {demoHint && <p className="mt-1 text-xs text-amber-900" role="note">{demoHint}</p>}
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Button variant="dark" size="sm" onClick={() => demoLogin('owner', '/owner')}>Demo owner</Button>
             <Button variant="outline" size="sm" onClick={() => demoLogin('admin', '/platform')}>Demo platform admin</Button>

@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { CalendarDays, ChevronDown, LayoutDashboard, LogOut, Ticket, User, FlaskConical, RotateCcw, MapPin, Clock, Phone, Mail, ShieldCheck, Eye, Building2, SearchX, PauseCircle } from 'lucide-react'
 import { useAuth, useFacility } from '../context/contexts.js'
 import { api } from '../lib/api/index.js'
-import { isDemo, LOGO_URL, PLATFORM_NAME } from '../lib/config.js'
+import { demoHint, isDemo, LOGO_URL, PLATFORM_NAME } from '../lib/config.js'
 import { TENANT, platformUrl } from '../lib/tenant.js'
 import { fmt12 } from '../lib/time.js'
 import { Alert, Button, EmptyState, Skeleton } from './ui.jsx'
@@ -15,8 +15,9 @@ function DemoBanner() {
       <div className="container-page flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-[13px] font-medium">
         <FlaskConical className="size-4 shrink-0" aria-hidden />
         <span>
-          <strong>DEMO MODE</strong> — sample data kept only in this browser tab. No real bookings, payments, emails or SMS.
+          <strong>DEMO MODE</strong> — sample data kept only in this browser. No real bookings, payments, emails or SMS.
         </span>
+        {demoHint && <span className="basis-full text-[12px] font-normal" role="note">{demoHint}</span>}
         <button onClick={() => { api.resetDemo(); window.location.assign(TENANT.basename || '/') }} className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 font-semibold underline-offset-2 hover:underline">
           <RotateCcw className="size-3.5" aria-hidden /> Reset demo
         </button>
