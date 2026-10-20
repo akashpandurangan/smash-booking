@@ -10,7 +10,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "check:supabase": "node scripts/check-supabase.mjs",
-    "test:unit": "node tests/unit/slug.test.mjs && node tests/unit/links.test.mjs && node tests/unit/envcheck.test.mjs",
+    "test:unit": "node tests/unit/slug.test.mjs && node tests/unit/links.test.mjs && node tests/unit/envcheck.test.mjs && node tests/unit/marketplace.test.mjs",
     "test:sql": "node tests/sql/multitenant.test.mjs",
     "test": "npm run test:unit && npm run test:sql"
   },

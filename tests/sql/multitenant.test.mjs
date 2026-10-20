@@ -30,7 +30,7 @@ console.log('A. Upgrading an existing single-facility database')
 }
 
 // ------------------------------------------------------------------ B. fresh multi-tenant
-const db = await makeDb({ upTo: 7 })
+const db = await makeDb({ upTo: 8 })
 const ownerA = await seedUser(db, 'a@x.com', { full_name: 'Alice Owner', phone: '9000000001' })
 const ownerB = await seedUser(db, 'b@x.com')
 const ownerC = await seedUser(db, 'c@x.com')
@@ -183,6 +183,121 @@ console.log('B9. Players read only the courts of their own bookings (0007)')
   ok((await call(bob, 'select count(*)::int n from bookings b join courts c on c.id = b.court_id')).rows[0].n > 0, 'bookings → courts join works for the player (court number shows)')
   await call(bob, "update courts set name = 'Hacked'").catch(() => {})
   ok((await db.query("select count(*)::int n from courts where name = 'Hacked'")).rows[0].n === 0, 'a player still cannot rename courts')
+}
+
+// ------------------------------------------------------------------ C. marketplace (0008)
+{ // section C is block-scoped so its helper names can't clash with earlier sections
+console.log('C0. Setup: two fresh owners with complete public profiles')
+await call(root, "select platform_set_setting('require_facility_approval','false'::jsonb)")
+const ownerD = await seedUser(db, 'd@x.com')
+const ownerE = await seedUser(db, 'e@x.com')
+const ownerF = await seedUser(db, 'f@x.com')
+const carol = await seedUser(db, 'carol@x.com')
+const full = {
+  locality: 'Baner', postal_code: '411045', maps_url: 'https://maps.app.goo.gl/AbC123xyz', latitude: '18.559000', longitude: '73.779000',
+  description: 'Six wooden-floor courts near the river.', amenities: ['parking', 'showers'], cover_image_url: 'https://cdn.example.com/cover.jpg',
+}
+const fd = (await create(ownerD, { ...wiz('marketd', 'Market Dee', 2, { city: 'Pune' }), ...full, courts: [{ name: 'Court A', price_per_hour: 400 }, { name: 'Court B' }] })).rows[0]
+const fe = (await create(ownerE, wiz('markete', 'Market Eee', 2, { city: 'Mumbai' }))).rows[0]
+const courtsD = (await call(ownerD, 'select id from courts where facility_id=$1 order by number', [fd.id])).rows.map((r) => r.id)
+const pubFac = async (slug) => (await as(db, 'anon', () => db.query('select get_facility_public($1) j', [slug]))).rows[0].j
+const pd = await pubFac('marketd')
+ok(pd.facility.description === full.description && pd.facility.locality === 'Baner' && pd.facility.postal_code === '411045', 'profile saved and public: description, locality, postal code')
+ok(pd.facility.maps_url === full.maps_url && Number(pd.facility.latitude) === 18.559 && pd.facility.cover_image_url === full.cover_image_url && pd.facility.amenities.join() === 'parking,showers', 'maps link, coordinates, cover image, amenities public')
+ok(pd.courts[0].price_per_hour == 400 && pd.courts[1].price_per_hour === null && Array.isArray(pd.banners) && pd.banners.length === 0, 'court-specific price exposed (null = facility price); banners start empty')
+
+console.log('C1. Profile validation happens in the database')
+const bad = (extra, re, label) => expectError(create(ownerF, wiz('bad-one', 'Bad One', 1, extra)), re).then((r) => ok(r, label))
+await bad({ maps_url: 'https://evil.example.com/maps' }, /invalid_maps_url/, 'non-Google maps link rejected')
+await bad({ maps_url: 'http://maps.google.com/?q=1' }, /invalid_maps_url/, 'http (not https) maps link rejected')
+await bad({ maps_url: 'javascript:alert(1)' }, /invalid_maps_url/, 'javascript: link rejected')
+await bad({ postal_code: '12345' }, /invalid_postal_code/, 'bad PIN code rejected')
+await bad({ latitude: '18.5' }, /invalid_location/, 'latitude without longitude rejected')
+await bad({ latitude: '95', longitude: '73' }, /invalid_location/, 'latitude out of range rejected')
+await bad({ amenities: ['swimming_pool'] }, /invalid_amenities/, 'amenity outside the fixed list rejected')
+await bad({ description: 'x'.repeat(2001) }, /description_too_long/, 'over-long description rejected')
+await bad({ cover_image_url: 'http://x.example/c.jpg' }, /invalid_image_url/, 'non-https cover image rejected')
+await bad({ courts: [{ name: 'A', price_per_hour: 'abc' }] }, /invalid_price/, 'non-numeric court price rejected')
+ok((await call(ownerF, 'select count(*)::int n from facility_members where user_id=$1', [ownerF])).rows[0].n === 0, 'failed validations left no half-created facility')
+ok(await expectError(call(ownerD, 'update facilities set maps_url = $1 where id = $2', ['https://evil.example.com', fd.id]), /permission denied/), 'owners cannot write the facilities table directly')
+const upd = (uid, id, p) => call(uid, 'select * from update_facility($1, $2::jsonb)', [id, JSON.stringify(p)])
+ok((await upd(ownerD, fd.id, { description: 'Updated text', maps_url: 'https://www.google.com/maps/place/Market+Dee', amenities: ['parking'] })).rows[0].description === 'Updated text', 'owner can edit their facility profile')
+ok(await expectError(upd(ownerE, fd.id, { description: 'hijacked' }), /forbidden/), "another owner cannot edit this facility's profile")
+await upd(ownerD, fd.id, { slug: 'hacked', status: 'suspended', plan: 'pro', max_courts: 50 })
+const afterD = (await call(ownerD, 'select slug, status, plan, max_courts from facilities where id=$1', [fd.id])).rows[0]
+ok(afterD.slug === 'marketd' && afterD.status === 'active' && afterD.plan === 'free' && afterD.max_courts === 6, 'slug / status / plan / court limit cannot be changed by the owner')
+
+console.log('C2. Public search')
+const search = (args = [], who = 'anon') => as(db, who, () => db.query('select * from search_public_facilities($1, $2::date, $3::time, $4::numeric, $5::numeric)', [args[0] ?? null, args[1] ?? null, args[2] ?? null, args[3] ?? null, args[4] ?? null])).then((r) => r.rows)
+const names = (rows) => rows.map((r) => r.name).sort().join('|')
+let all = await search()
+ok(all.length === 4 && !names(all).includes('New Place'), 'search lists only ACTIVE facilities (pending ones hidden)')
+ok(!('contact_phone' in all[0]) && !('contact_email' in all[0]) && !('id' in all[0]), 'search result exposes no private fields')
+ok(names(await search(['baner'])) === 'Market Dee' && names(await search(['PUNE'])) === 'Market Dee' && names(await search(['mumbai'])) === 'Market Eee', 'filters by locality / city, case-insensitive')
+ok((await search(['%'])).length === 0 && (await search(['_'])).length === 0, 'wildcard characters in the query are treated literally')
+ok(names(await search(['411045'])) === 'Market Dee', 'filters by postal code')
+await call(root, "select * from platform_set_facility_status($1,'suspended','test')", [fe.id])
+ok(!names(await search()).includes('Market Eee'), 'a suspended facility disappears from search')
+await call(root, "select * from platform_set_facility_status($1,'active')", [fe.id])
+ok(all.find((r) => r.name === 'Market Dee').availability === 'not_checked' && all.find((r) => r.name === 'Market Dee').free_hours === null, 'no date → availability "not_checked", never a made-up number')
+ok(Number(all.find((r) => r.name === 'Market Dee').min_price_per_hour) === 300 && Number(all.find((r) => r.name === 'Market Eee').min_price_per_hour) === 300, 'starting price = cheapest court (override 400 vs facility 300 → 300)')
+const d2 = (await db.query("select (current_date + 2)::text d")).rows[0].d
+const dRow = async (extra = []) => (await search(['market', d2, ...extra])).find((r) => r.name === 'Market Dee')
+let r0 = await dRow()
+ok(r0.availability === 'open' && Number(r0.free_hours) === 32, `date given → real count of free hours (2 courts x 16h = ${r0.free_hours})`)
+await call(alice, "select * from create_order('marketd', $1::uuid[], current_date+2, $2::jsonb, 'Pat Player', '9876543210')", [[courtsD[0]], seg('10:00', '11:00')])
+let r1 = await dRow()
+ok(Number(r1.free_hours) === 31, 'a booking reduces the free hours by exactly its length')
+ok((await dRow(['10:00'])).courts_free_at_time === 1 && (await dRow(['11:00'])).courts_free_at_time === 2, 'preferred time: only courts free for the whole hour are counted')
+ok((await dRow(['21:30'])).courts_free_at_time === 0, 'a start time too close to closing counts zero')
+await call(ownerD, "select * from admin_create_block($1, current_date+2, '14:00', '16:00', 'maintenance')", [courtsD[1]])
+ok(Number((await dRow()).free_hours) === 29, 'blocks reduce availability too')
+await db.exec(`update facilities set closed_weekdays = array[extract(dow from current_date+2)::smallint] where id = '${fe.id}'`)
+ok((await search(['market', d2])).find((r) => r.name === 'Market Eee').availability === 'closed', 'weekly day off → "closed", no free hours claimed')
+const far = (await db.query("select (current_date + 40)::text d")).rows[0].d
+const past = (await db.query("select (current_date - 3)::text d")).rows[0].d
+ok((await search(['market', far])).every((r) => r.availability === 'unverifiable' && r.free_hours === null) && (await search(['market', past])).every((r) => r.availability === 'unverifiable'), 'dates outside the booking window → "unverifiable" (never claims availability)')
+const near = await search([null, null, null, '18.56', '73.78'])
+ok(near[0].name === 'Market Dee' && Number(near[0].distance_km) < 3 && near.find((r) => r.name === 'Market Eee').distance_km === null, 'distance sorting: nearest first, facilities without coordinates last with no distance')
+ok((await search([null, null, null, '200', '73'])).every((r) => r.distance_km === null), 'invalid coordinates are ignored, not an error')
+
+console.log('C3. Per-court pricing (server-side)')
+const total = async (uid, ids, s) => Number((await call(uid, "select total_amount from create_order('marketd', $1::uuid[], current_date+2, $2::jsonb, 'Pat Player', '9876543210')", [ids, s])).rows[0].total_amount)
+ok(await total(bob, [courtsD[0]], seg('12:00', '13:00')) === 400, "court with its own price: ₹400 for 1 hour")
+ok(await total(bob, [courtsD[1]], seg('12:00', '13:00')) === 300, 'court without override uses the facility price: ₹300')
+ok(await total(alice, [courtsD[0], courtsD[1]], seg('17:00', '18:00')) === 700, 'two courts: each court priced separately (400 + 300)')
+ok(await total(carol, [courtsD[0]], JSON.stringify([{ start: '19:00', end: '20:00' }, { start: '20:00', end: '21:00' }])) === 800, 'multi-hour: 2h on the ₹400 court = ₹800')
+await call(ownerD, 'update courts set price_per_hour = 10 where id = $1', [courtsA[0]]) // RLS: matches no row
+ok((await db.query('select price_per_hour from courts where id=$1', [courtsA[0]])).rows[0].price_per_hour === null, "an owner cannot change another facility's court price")
+ok((await call(ownerD, 'update courts set price_per_hour = 450 where id = $1 returning price_per_hour', [courtsD[0]])).rows[0].price_per_hour == 450, 'owner can change their own court price')
+
+console.log('C4. Banners')
+const bn = (n) => Array.from({ length: n }, (_, i) => ({ image_url: `https://cdn.example.com/b${i}.jpg`, heading: `Offer ${i}`, description: 'Weekend special', cta_label: 'Book now' }))
+const saveB = (uid, fid, arr) => call(uid, 'select * from save_facility_banners($1, $2::jsonb)', [fid, JSON.stringify(arr)])
+ok((await saveB(ownerD, fd.id, bn(2))).rows.length === 2, 'owner saves two banners')
+ok((await pubFac('marketd')).banners.map((b) => b.heading).join() === 'Offer 0,Offer 1', 'public page returns the banners in order')
+ok(await expectError(saveB(ownerE, fd.id, bn(1)), /forbidden/), "another owner cannot write this facility's banners")
+ok(await expectError(saveB(ownerD, fd.id, bn(4)), /too_many_banners/), 'more than 3 banners rejected')
+ok(await expectError(saveB(ownerD, fd.id, [{ image_url: 'http://x.example/a.jpg' }]), /invalid_image_url/), 'non-https banner image rejected')
+ok(await expectError(saveB(ownerD, fd.id, [{ image_url: 'https://x.example/a.jpg', heading: 'h'.repeat(81) }]), /banner_text_too_long/), 'over-long banner heading rejected')
+ok((await pubFac('marketd')).banners.length === 2, 'failed saves did not change the existing banners')
+ok(await expectError(as(db, 'anon', () => db.query('select * from save_facility_banners($1, $2::jsonb)', [fd.id, '[]'])), /permission denied/), 'anonymous visitors cannot call save_facility_banners')
+ok(await expectError(call(ownerD, "insert into facility_banners (facility_id, position, image_url) values ($1, 2, 'https://x.example/a.jpg')", [fd.id]), /permission denied/), 'banners cannot be written directly, only through the checked function')
+await saveB(ownerE, fe.id, bn(1))
+ok((await call(ownerE, 'select count(*)::int n from facility_banners')).rows[0].n === 1 && (await pubFac('marketd')).banners.length === 2, "owner E sees only their own banners and D's are untouched")
+await saveB(ownerD, fd.id, [...bn(2)].reverse())
+ok((await pubFac('marketd')).banners.map((b) => b.heading).join() === 'Offer 1,Offer 0', 'banners can be reordered')
+await saveB(ownerD, fd.id, [])
+ok((await pubFac('marketd')).banners.length === 0, 'banners can all be removed')
+
+console.log('C5. Media + isolation of private data')
+const media = (uid, name) => call(uid, 'select can_manage_media($1) ok', [name]).then((r) => r.rows[0].ok)
+ok(await media(ownerD, `${fd.id}/cover.jpg`) === true && await media(ownerE, `${fd.id}/cover.jpg`) === false, 'only a facility’s own members may write under <facility-id>/ in storage')
+ok(await media(ownerD, 'not-a-uuid/x.jpg') === false && await media(ownerD, '') === false, 'malformed storage paths are refused')
+ok(await expectError(call(ownerD, "select _validate_profile('{}'::jsonb)"), /permission denied/), 'internal validators are not callable by browsers')
+ok((await call(ownerE, 'select count(*)::int n from facilities where id = $1', [fd.id])).rows[0].n === 0, "owner E cannot read owner D's private facility row")
+ok((await call(ownerE, 'select count(*)::int n from orders where facility_id = $1', [fd.id])).rows[0].n === 0, "owner E cannot read owner D's bookings")
+
 }
 
 console.log(fails ? `\n${fails} CHECK(S) FAILED` : '\nALL SQL CHECKS PASSED')

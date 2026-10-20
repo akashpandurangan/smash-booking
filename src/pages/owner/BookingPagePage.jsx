@@ -8,10 +8,11 @@ import { Alert, Button, Field } from '../../components/ui.jsx'
 import BookingLinkCard from '../../components/BookingLinkCard.jsx'
 import { LOGO_URL } from '../../lib/config.js'
 import { useAdmin } from './OwnerLayout.jsx'
+import BannerEditor from '../../components/BannerEditor.jsx'
 
 /** The facility's public link, subdomain status and branding. */
 export default function BookingPagePage() {
-  const { settings, courts } = useFacility()
+  const { settings, courts, banners } = useFacility()
   const { reloadFacility } = useAdmin()
   const toast = useToast()
   const [b, setB] = useState({ logoUrl: settings.logoUrl, tagline: settings.tagline })
@@ -51,6 +52,8 @@ export default function BookingPagePage() {
         {!live && <Alert tone="warn" className="mt-4" title="Players can’t see your page yet">Only you can preview it. {settings.status === 'pending' ? 'You’ll go live as soon as a platform administrator approves your facility.' : ''}</Alert>}
         <p className="mt-4 flex gap-2 text-xs text-muted"><ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />Your web address can only be changed by a platform administrator, so shared links never break unexpectedly.</p>
       </section>
+
+      <BannerEditor key={JSON.stringify(banners)} facilityId={settings.id} saved={banners} onSaved={reloadFacility} toast={toast} />
 
       <form onSubmit={save} className="card p-5 sm:p-6" noValidate>
         <h2 className="text-lg font-bold">Branding</h2>

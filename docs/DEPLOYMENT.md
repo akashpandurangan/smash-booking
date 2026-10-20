@@ -22,7 +22,7 @@ The slug is only a lookup key. `get_facility_public(slug)` returns the facility 
 
 1. Create a project (free tier is fine).
 2. SQL editor → run, **in order**:
-   `0001_schema.sql` → `0002_orders_razorpay.sql` → `0003_multi_slot.sql` → `0004_segments.sql` → `0005_max_slots_8.sql` → **`0006_multitenant.sql`** → **`0007_player_court_read.sql`** → (optional) `seed.sql` is no longer needed — facilities create their own courts.
+   `0001_schema.sql` → `0002_orders_razorpay.sql` → `0003_multi_slot.sql` → `0004_segments.sql` → `0005_max_slots_8.sql` → **`0006_multitenant.sql`** → **`0007_player_court_read.sql`** → **`0008_marketplace.sql`** → (optional) `seed.sql` is no longer needed — facilities create their own courts.
    *Upgrading an existing deployment?* `0006` migrates your single facility into the new model as slug `smash-booking`, keeps all bookings, and turns former global owners into that facility's owner. **Nobody becomes a platform admin by migration.** Its Razorpay is **not** carried over — see section 5.
 3. **Create the first platform administrator** (once, by you, after registering normally at `/owner/register`):
    ```sql
@@ -49,6 +49,12 @@ The slug is only a lookup key. `get_facility_public(slug)` returns the facility 
    supabase functions deploy razorpay-webhook --no-verify-jwt
    ```
    **No global Razorpay secrets are needed any more** — `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically. The service-role key never reaches the browser.
+
+### Marketplace migration (0008) — what it needs
+- Run it once, after `0007`. It adds the facility profile fields (description, locality, PIN code, Google Maps link, latitude/longitude, cover image, amenities), optional **per-court prices**, the **banners** table, the public **search** function and the **`facility-media`** Storage bucket with its policies.
+- The Storage part is created by the migration itself (a public-read bucket limited to JPG/PNG/WebP up to 3 MB; only members of a facility can upload under `<facility-id>/`). The SQL editor may show a "destructive operations" warning because the file contains `DROP POLICY IF EXISTS` for the four **new** storage policies it is about to create — confirm it. If Storage is disabled in your project, that block is skipped and image upload will fail until Storage is enabled.
+- Existing facilities, courts, bookings and prices are untouched. A court with no price of its own keeps using the facility price.
+- Verify with `supabase/verify.sql` (section 6) and `npm run check:supabase`.
 
 ## 2. Environment variables
 

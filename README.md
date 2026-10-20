@@ -8,7 +8,7 @@ A platform where **each facility owner registers, sets up their courts, and auto
 
 | Area | Where | What |
 |---|---|---|
-| Platform site | `/` (primary domain) | landing page + directory of live facilities |
+| Marketplace | `/` (primary domain) | “Your next game starts here.” — search live facilities by city / area / PIN, date, time or your location; cards show real prices and availability (never invented) |
 | Owner registration & login | `/owner/register`, `/owner/login` | email/password, verification, password reset — separate from player login |
 | Setup wizard | `/owner/setup` | facility → web address (auto-slug + suggestions) → courts → hours/durations/pricing/days off → payments → review & activate |
 | Owner dashboard | `/owner/*` | overview, bookings, calendar, courts & blocks, payments, booking page (link, subdomain status, branding), settings, activity log |
@@ -29,7 +29,7 @@ No `.env.local` → **demo mode** (amber banner): local sample facilities (**Sma
 
 Everything is in **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**: Supabase setup and migrations, the first platform administrator, env vars, Vercel + wildcard DNS (`*.smashbooking.com`), per-facility Razorpay, local testing and the verification checklist.
 
-Short version: run migrations `0001`–`0007`, deploy the 4 Edge Functions, set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` / `VITE_ROOT_DOMAIN`, deploy to Vercel (`vercel.json` handles routing). **Test today on your existing `*.vercel.app` URL with `/book/<slug>` links.** Add `smashbooking.com` + `*.smashbooking.com` in Vercel when you own the domain, then set `VITE_WILDCARD_DOMAIN_READY=true`.
+Short version: run migrations `0001`–`0008`, deploy the 4 Edge Functions, set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` / `VITE_ROOT_DOMAIN`, deploy to Vercel (`vercel.json` handles routing). **Test today on your existing `*.vercel.app` URL with `/book/<slug>` links.** Add `smashbooking.com` + `*.smashbooking.com` in Vercel when you own the domain, then set `VITE_WILDCARD_DOMAIN_READY=true`.
 
 ## Security model (summary)
 
@@ -42,7 +42,7 @@ Short version: run migrations `0001`–`0007`, deploy the 4 Edge Functions, set 
 ## Project layout
 
 ```
-supabase/migrations/   0001…0007 (0006 = multi-tenant, 0007 = players read their own booked courts)
+supabase/migrations/   0001…0008 (0006 = multi-tenant, 0007 = players read their own booked courts, 0008 = marketplace: profile, banners, search, media)
 supabase/functions/    create-razorpay-order · verify-razorpay-payment · save-payment-config · razorpay-webhook
 src/lib/tenant.js      hostname / path tenant resolution      src/lib/slug.js   name → subdomain
 src/lib/api/           demo.js + supabase.js behind one `api`

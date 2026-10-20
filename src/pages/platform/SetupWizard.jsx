@@ -10,6 +10,9 @@ import { WEEKDAYS, fmt12, fmtDate, money, toMin } from '../../lib/time.js'
 import { Alert, Badge, Button, Field, Skeleton } from '../../components/ui.jsx'
 import LinkActions, { LinkNote } from '../../components/LinkActions.jsx'
 import { LOGO_URL } from '../../lib/config.js'
+import ImagePicker from '../../components/ImagePicker.jsx'
+import ProfileFields from '../../components/ProfileFields.jsx'
+import { profilePayload, validateProfile } from '../../lib/profile.js'
 
 const STEPS = ['Facility', 'Web address', 'Courts', 'Hours & pricing', 'Payments', 'Review']
 const MAX_COURTS = 6 // the database enforces the real per-plan limit
@@ -18,7 +21,8 @@ const DRAFT_KEY = 'owner-setup-draft-v1' // no secrets are ever stored here
 const blank = () => ({
   name: '', tagline: 'Your Court. Your Game.', address: '', city: '', contactPhone: '', contactEmail: '', logoUrl: '',
   slug: '', slugTouched: false,
-  courts: [{ name: 'Court 1', imageUrl: '' }, { name: 'Court 2', imageUrl: '' }],
+  description: '', locality: '', postalCode: '', mapsUrl: '', latitude: '', longitude: '', amenities: [],
+  courts: [{ name: 'Court 1', imageUrl: '', price: '' }, { name: 'Court 2', imageUrl: '', price: '' }],
   openingTime: '06:00', closingTime: '22:00', availableDurations: [1, 2, 3, 4], pricePerHour: 300,
   closedWeekdays: [], holidays: [], cancellationPolicy: 'Bookings can be cancelled up to 24 hours before the slot for a refund. Contact the facility for changes.',
   payMode: 'later', // 'razorpay' | 'test' | 'later'
@@ -31,7 +35,7 @@ const loadDraft = () => {
 }
 
 export default function SetupWizard() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, refreshRoles } = useAuth()
   const nav = useNavigate()
   const draft = useMemo(loadDraft, [])
   const [form, setForm] = useState(draft?.form || blank())
@@ -43,6 +47,7 @@ export default function SetupWizard() {
   const [slugChecking, setSlugChecking] = useState(false)
   const [submit, setSubmit] = useState({ state: 'idle', stage: '', error: '', result: null, warning: '' })
   const [holidayInput, setHolidayInput] = useState('')
+  const [coverFile, setCoverFile] = useState(null) // chosen now, uploaded right after the facility exists (not kept in the draft)
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
   const patch = (o) => setForm((f) => ({ ...f, ...o }))
@@ -105,6 +110,7 @@ export default function SetupWizard() {
       if (!/^\d{10,15}$/.test(form.contactPhone.replace(/\D/g, ''))) e.contactPhone = 'Enter a valid contact number (10–15 digits).'
       if (form.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail)) e.contactEmail = 'Enter a valid email or leave it blank.'
       if (form.logoUrl && !/^https:\/\//.test(form.logoUrl.trim())) e.logoUrl = 'Logo must be an https:// image link.'
+      Object.assign(e, validateProfile(form))
     }
     if (i === 1 && !slugOk) e.slug = slugMsg?.text || 'Choose a web address.'
     if (i === 2) {
@@ -112,6 +118,7 @@ export default function SetupWizard() {
       else if (form.courts.some((c) => !c.name.trim())) e.courts = 'Every court needs a name.'
       else if (new Set(form.courts.map((c) => c.name.trim().toLowerCase())).size !== form.courts.length) e.courts = 'Court names must be different.'
       else if (form.courts.some((c) => c.imageUrl && !/^https:\/\//.test(c.imageUrl.trim()))) e.courts = 'Court images must be https:// links.'
+      else if (form.courts.some((c) => String(c.price ?? '').trim() !== '' && !(Number(c.price) >= 0 && Number(c.price) <= 100000))) e.courts = 'Court prices must be numbers (or leave a price empty to use the facility price).'
     }
     if (i === 3) {
       if (!form.openingTime || !form.closingTime || toMin(form.openingTime) >= toMin(form.closingTime)) e.hours = 'Closing time must be after opening time.'
@@ -136,7 +143,8 @@ export default function SetupWizard() {
       const facility = await api.owner.createFacility({
         name: form.name.trim(), slug: form.slug, tagline: form.tagline.trim(), logoUrl: form.logoUrl.trim(), address: form.address.trim(), city: form.city.trim(),
         contactPhone: form.contactPhone.replace(/\D/g, ''), contactEmail: form.contactEmail.trim(), openingTime: form.openingTime, closingTime: form.closingTime,
-        availableDurations: form.availableDurations, pricePerHour: Number(form.pricePerHour), courts: form.courts.map((c) => ({ name: c.name.trim(), imageUrl: c.imageUrl.trim() })),
+        availableDurations: form.availableDurations, pricePerHour: Number(form.pricePerHour), courts: form.courts.map((c) => ({ name: c.name.trim(), imageUrl: c.imageUrl.trim(), pricePerHour: String(c.price ?? '').trim() === '' ? null : Number(c.price) })),
+        ...profilePayload({ ...form, coverImageUrl: '' }),
         closedWeekdays: form.closedWeekdays, holidays: form.holidays, cancellationPolicy: form.cancellationPolicy.trim(),
       })
       let warning = ''
@@ -147,6 +155,16 @@ export default function SetupWizard() {
       } catch (e) {
         warning = `Your facility was created, but payments could not be configured: ${friendlyError(e)} You can fix this in Dashboard → Payments.`
       }
+      if (coverFile) {
+        setSubmit((s) => ({ ...s, stage: 'Uploading your cover photo…' }))
+        try {
+          const url = await api.owner.uploadImage(facility.id, coverFile, 'cover')
+          await api.owner.updateFacility(facility.id, { coverImageUrl: url })
+        } catch (e) {
+          warning = `${warning ? warning + ' ' : ''}Your facility was created, but the cover photo could not be uploaded: ${friendlyError(e)} Add it in Settings → About, location & photo.`
+        }
+      }
+      try { await refreshRoles() } catch { /* the header refreshes on the next navigation */ }
       try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ }
       setRz({ keyId: '', keySecret: '', webhookSecret: '' }) // drop the secret from memory
       setSubmit({ state: 'done', stage: '', error: '', result: facility, warning })
@@ -219,6 +237,11 @@ export default function SetupWizard() {
                 <Field label="Contact phone" error={err('contactPhone')} hint="Shown to players."><input className="input" type="tel" inputMode="tel" value={form.contactPhone} onChange={set('contactPhone')} /></Field>
                 <Field label="Contact email (optional)" error={err('contactEmail')}><input className="input" type="email" value={form.contactEmail} onChange={set('contactEmail')} /></Field>
                 <Field label="Logo image link (optional)" error={err('logoUrl')} hint="An https link to your logo. Skip it to use the Smash Booking mark."><input className="input" value={form.logoUrl} onChange={set('logoUrl')} placeholder="https://…" /></Field>
+                <h3 className="mt-2 border-t border-line pt-5 text-lg font-bold sm:col-span-2">Location &amp; about <span className="text-sm font-normal text-muted">(helps players find and trust you)</span></h3>
+                <div className="sm:col-span-2">
+                  <ImagePicker label="Cover photo (optional)" file={coverFile} onFile={setCoverFile} hint="A real photo of your courts, shown on your facility card and page. You can add or change it later." />
+                </div>
+                <ProfileFields value={form} onChange={patch} errors={errors} />
               </div>
             )}
 
@@ -263,20 +286,21 @@ export default function SetupWizard() {
 
             {step === 2 && (
               <div className="space-y-4">
-                <div><h2 className="text-xl font-bold">Your courts</h2><p className="mt-1 text-sm text-muted">Name each court the way your players know it. Up to {MAX_COURTS} courts on your plan.</p></div>
+                <div><h2 className="text-xl font-bold">Your courts</h2><p className="mt-1 text-sm text-muted">Name each court the way your players know it. Give a court its own hourly price, or leave it empty to use your facility price (set in the next steps). Up to {MAX_COURTS} courts on your plan.</p></div>
                 {err('courts') && <Alert tone="error">{err('courts')}</Alert>}
                 <ul className="space-y-3">
                   {form.courts.map((c, i) => (
                     <li key={i} className="rounded-2xl border border-line p-3 sm:p-4">
-                      <div className="grid gap-3 sm:grid-cols-[1fr_1.4fr_auto] sm:items-end">
+                      <div className="grid gap-3 sm:grid-cols-[1fr_1.4fr_8.5rem_auto] sm:items-end">
                         <Field label={`Court ${i + 1} name`}><input className="input" value={c.name} onChange={(e) => patch({ courts: form.courts.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} /></Field>
                         <Field label="Image link (optional)"><input className="input" value={c.imageUrl} placeholder="https://…" onChange={(e) => patch({ courts: form.courts.map((x, j) => (j === i ? { ...x, imageUrl: e.target.value } : x)) })} /></Field>
+                        <Field label="Price / hour (₹)" hint="Optional"><input className="input" type="number" min="0" step="10" inputMode="decimal" value={c.price ?? ''} placeholder={String(form.pricePerHour || '')} onChange={(e) => patch({ courts: form.courts.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)) })} /></Field>
                         <Button variant="dangerOutline" size="sm" onClick={() => patch({ courts: form.courts.filter((_, j) => j !== i) })} disabled={form.courts.length === 1} aria-label={`Remove court ${i + 1}`}><Trash2 className="size-4" aria-hidden />Remove</Button>
                       </div>
                     </li>
                   ))}
                 </ul>
-                <Button variant="outline" onClick={() => patch({ courts: [...form.courts, { name: `Court ${form.courts.length + 1}`, imageUrl: '' }] })} disabled={form.courts.length >= MAX_COURTS}><Plus className="size-4" aria-hidden />Add a court</Button>
+                <Button variant="outline" onClick={() => patch({ courts: [...form.courts, { name: `Court ${form.courts.length + 1}`, imageUrl: '', price: '' }] })} disabled={form.courts.length >= MAX_COURTS}><Plus className="size-4" aria-hidden />Add a court</Button>
               </div>
             )}
 

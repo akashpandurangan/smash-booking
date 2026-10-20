@@ -2,11 +2,21 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, AlertCircle, Info } from 'lucide-react'
 import { api } from '../lib/api/index.js'
 import { friendlyError } from '../lib/errors.js'
+import { rememberFacility } from '../lib/lastFacility.js'
 import { AuthContext, FacilityContext, ToastContext } from './contexts.js'
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  // Facilities this account manages (from facility_members, via RLS). null = still loading; [] = a plain player.
+  const [ownedFacilities, setOwnedFacilities] = useState(null)
+
+  useEffect(() => {
+    if (!user) { setOwnedFacilities(null); return undefined }
+    let alive = true
+    api.owner.myFacilities().then((l) => alive && setOwnedFacilities(l)).catch(() => alive && setOwnedFacilities([]))
+    return () => { alive = false }
+  }, [user])
 
   useEffect(() => {
     let alive = true
@@ -29,6 +39,12 @@ export function AuthProvider({ children }) {
       loading,
       // UI hint only. Platform-admin actions are re-checked server-side (platform_admins allow-list).
       isPlatformAdmin: !!user?.isPlatformAdmin,
+      ownedFacilities: ownedFacilities || [],
+      // "Owner" is never a flag on the user: it means a facility_members row exists (the database decides).
+      isOwner: !!ownedFacilities?.length,
+      rolesLoading: !!user && ownedFacilities === null,
+      // call after creating a facility so the header switches to the owner navigation immediately
+      refreshRoles: async () => setOwnedFacilities(await api.owner.myFacilities().catch(() => [])),
       signIn: async (email, password) => {
         await api.auth.signIn(email, password)
         setUser(await api.auth.getUser())
@@ -42,20 +58,21 @@ export function AuthProvider({ children }) {
       updatePassword: (pw) => api.auth.updatePassword(pw),
       quickLogin: async (role) => setUser(await api.auth.quickLogin(role)),
     }),
-    [user, loading],
+    [user, loading, ownedFacilities],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 /** Tenant site only: loads the facility for the current hostname (never trusts an id from the URL). */
 export function FacilityProvider({ children }) {
-  const [state, setState] = useState({ settings: null, courts: [], tenantState: 'loading', loading: true, error: null })
+  const [state, setState] = useState({ settings: null, courts: [], banners: [], tenantState: 'loading', loading: true, error: null })
 
   const reload = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }))
     try {
       const r = await api.getFacility()
-      setState({ settings: r.settings || null, courts: r.courts || [], tenantState: r.state, loading: false, error: null })
+      setState({ settings: r.settings || null, courts: r.courts || [], banners: r.banners || [], tenantState: r.state, loading: false, error: null })
+      if (r.state === 'live' && r.settings?.slug) rememberFacility(r.settings.slug)
     } catch (e) {
       setState((s) => ({ ...s, loading: false, error: friendlyError(e) }))
     }

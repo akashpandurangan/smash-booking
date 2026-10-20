@@ -1,24 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, NavLink, Outlet, useLocation, useOutletContext } from 'react-router-dom'
-import { Activity, CalendarCheck, CalendarDays, CreditCard, Globe, LayoutDashboard, Settings, Wrench } from 'lucide-react'
+import { Activity, CreditCard, Globe } from 'lucide-react'
 import { useAuth } from '../../context/contexts.js'
 import { FacilityContext } from '../../context/contexts.js'
 import { api } from '../../lib/api/index.js'
 import { friendlyError } from '../../lib/errors.js'
 import { FACILITY_STATUS } from '../../lib/status.js'
 import { bookingUrl } from '../../lib/tenant.js'
+import { ownerRefresh } from '../../lib/ownerRefresh.js'
 import { Alert, Badge, Skeleton } from '../../components/ui.jsx'
 
 export const useAdmin = () => useOutletContext()
 
+// The main sections (Dashboard, Bookings, Courts, Availability, Settings) live in the header; these are the rest.
 const LINKS = [
-  ['/owner', 'Overview', LayoutDashboard, true],
-  ['/owner/bookings', 'Bookings', CalendarCheck],
-  ['/owner/calendar', 'Calendar', CalendarDays],
-  ['/owner/courts', 'Courts & blocks', Wrench],
   ['/owner/payments', 'Payments', CreditCard],
   ['/owner/page', 'Booking page', Globe],
-  ['/owner/settings', 'Settings', Settings],
   ['/owner/activity', 'Activity log', Activity],
 ]
 
@@ -60,8 +57,26 @@ export default function OwnerLayout() {
 
   useEffect(() => { reloadFacility(); reload() }, [reloadFacility, reload])
 
+  // Header "Refresh": reloads facility, courts, bookings, blocks (and the owner's facility list) from the database.
+  const refreshAll = useCallback(async () => {
+    if (!fid) return
+    const [fl, d, b, k] = await Promise.all([api.owner.myFacilities(), api.owner.facility(fid), api.admin.listBookings(fid), api.admin.listBlocks(fid)])
+    setFacilities(fl)
+    setData(d)
+    setBookings(b)
+    setBlocks(k)
+    setError('')
+  }, [fid])
+  useEffect(() => ownerRefresh.register(async () => {
+    try { await refreshAll() } catch (e) { setError(friendlyError(e)); throw e }
+  }), [refreshAll])
+  const stamped = useRef(false)
+  useEffect(() => {
+    if (data && bookings && !stamped.current) { stamped.current = true; ownerRefresh.markFresh() }
+  }, [data, bookings])
+
   const facilityCtx = useMemo(
-    () => ({ settings: data?.settings || null, courts: data?.courts || [], tenantState: 'live', loading: !data, error: null, reload: reloadFacility }),
+    () => ({ settings: data?.settings || null, courts: data?.courts || [], banners: data?.banners || [], tenantState: 'live', loading: !data, error: null, reload: reloadFacility }),
     [data, reloadFacility],
   )
 
@@ -74,7 +89,7 @@ export default function OwnerLayout() {
   return (
     <FacilityContext.Provider value={facilityCtx}>
       <div className="container-page py-6 sm:py-10 lg:grid lg:grid-cols-[230px_1fr] lg:gap-8">
-        <nav aria-label="Owner" className="-mx-4 mb-6 flex gap-1.5 overflow-x-auto px-4 no-scrollbar lg:mx-0 lg:mb-0 lg:flex-col lg:px-0">
+        <nav aria-label="More owner pages" className="-mx-4 mb-6 flex gap-1.5 overflow-x-auto px-4 no-scrollbar lg:mx-0 lg:mb-0 lg:flex-col lg:px-0">
           <div className="mb-2 hidden px-3 lg:block">
             {facilities.length > 1 ? (
               <select aria-label="Facility" className="input !py-2 text-sm" value={fid || ''} onChange={(e) => { setData(null); setBookings(null); setFid(e.target.value) }}>

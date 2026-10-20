@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js'
 import { supabaseConfigured, supabaseUrl, supabaseAnonKey } from '../config.js'
 import { TENANT } from '../tenant.js'
 import { norm } from '../time.js'
+import { prepareImage } from '../images.js'
 
 // Only constructed when env vars are present, so demo mode never touches the network.
 export const supabase = supabaseConfigured
@@ -28,10 +29,25 @@ const mapFacility = (r) => ({
   pricePerSlot: Number(r.price_per_slot), maxSlotsPerBooking: r.max_slots_per_booking, maxUnpaidHolds: r.max_unpaid_holds,
   holdMinutes: r.hold_minutes, advanceBookingDays: r.advance_booking_days, timezone: r.timezone,
   cancellationPolicy: r.cancellation_policy, availableDurations: r.available_durations || [1, 2, 3, 4],
+  description: r.description || '', locality: r.locality || '', postalCode: r.postal_code || '', mapsUrl: r.maps_url || '',
+  latitude: r.latitude == null ? null : Number(r.latitude), longitude: r.longitude == null ? null : Number(r.longitude),
+  coverImageUrl: r.cover_image_url || '', amenities: r.amenities || [],
   closedWeekdays: r.closed_weekdays || [], holidays: r.holidays || [], allowDemoPayments: !!r.allow_demo_payments,
   paymentMode: r.payment_mode || 'none', razorpayKeyId: r.razorpay_key_id || null, createdAt: r.created_at,
 })
-const mapCourt = (c) => ({ id: c.id, number: c.number, name: c.name, imageUrl: c.image_url || '', isActive: c.is_active, facilityId: c.facility_id })
+const mapCourt = (c) => ({
+  id: c.id, number: c.number, name: c.name, imageUrl: c.image_url || '', isActive: c.is_active, facilityId: c.facility_id,
+  pricePerHour: c.price_per_hour == null ? null : Number(c.price_per_hour), // null = the facility's price
+})
+const mapBanner = (b) => ({ position: b.position, imageUrl: b.image_url, heading: b.heading || '', description: b.description || '', ctaLabel: b.cta_label || '' })
+const mapResult = (r) => ({
+  slug: r.slug, name: r.name, tagline: r.tagline, city: r.city, locality: r.locality || '', address: r.address || '', logoUrl: r.logo_url || '',
+  coverImageUrl: r.cover_image_url || '', amenities: r.amenities || [], mapsUrl: r.maps_url || '',
+  latitude: r.latitude == null ? null : Number(r.latitude), longitude: r.longitude == null ? null : Number(r.longitude),
+  minPricePerHour: r.min_price_per_hour == null ? null : Number(r.min_price_per_hour), courtCount: r.court_count,
+  distanceKm: r.distance_km == null ? null : Number(r.distance_km), availability: r.availability,
+  freeHours: r.free_hours == null ? null : Number(r.free_hours), courtsFreeAtTime: r.courts_free_at_time == null ? null : Number(r.courts_free_at_time),
+})
 
 const mapOrder = (r) => {
   const rows = r.bookings || []
@@ -57,6 +73,8 @@ const FACILITY_FIELDS = {
   availableDurations: 'available_durations', maxUnpaidHolds: 'max_unpaid_holds', holdMinutes: 'hold_minutes',
   advanceBookingDays: 'advance_booking_days', cancellationPolicy: 'cancellation_policy', closedWeekdays: 'closed_weekdays',
   holidays: 'holidays', allowDemoPayments: 'allow_demo_payments',
+  description: 'description', locality: 'locality', postalCode: 'postal_code', mapsUrl: 'maps_url', latitude: 'latitude', longitude: 'longitude',
+  coverImageUrl: 'cover_image_url', amenities: 'amenities',
 }
 const toFacilityJson = (p) => {
   const out = {}
@@ -140,11 +158,19 @@ export const supabaseApi = {
     const j = check(await supabase.rpc('get_facility_public', { p_slug: TENANT.slug }))
     if (!j.facility) return { state: j.state }
     currentFacilityId = j.facility.id
-    return { state: j.state, settings: mapFacility(j.facility), courts: j.courts.map(mapCourt) }
+    return { state: j.state, settings: mapFacility(j.facility), courts: j.courts.map(mapCourt), banners: (j.banners || []).map(mapBanner) }
   },
 
   async publicFacilities() {
     return check(await supabase.rpc('list_public_facilities')).map((r) => ({ slug: r.slug, name: r.name, city: r.city, logoUrl: r.logo_url || '', tagline: r.tagline }))
+  },
+
+  /** Public marketplace search (active facilities only). Availability fields are real or null — never guessed. */
+  async searchFacilities({ query, date, time, lat, lng } = {}) {
+    const rows = check(await supabase.rpc('search_public_facilities', {
+      p_query: query || null, p_date: date || null, p_time: time || null, p_lat: lat ?? null, p_lng: lng ?? null,
+    }))
+    return rows.map(mapResult)
   },
 
   async getBusy(date) {
@@ -199,31 +225,45 @@ export const supabaseApi = {
         supabase.from('facilities').select('*').eq('id', fid).single(),
         supabase.from('courts').select('*').eq('facility_id', fid).order('number'),
       ])
-      return { settings: mapFacility(check(f)), courts: check(c).map(mapCourt) }
+      const banners = check(await supabase.from('facility_banners').select('*').eq('facility_id', fid).order('position'))
+      return { settings: mapFacility(check(f)), courts: check(c).map(mapCourt), banners: banners.map(mapBanner) }
     },
     async checkSlugs(slugs) {
       return check(await supabase.rpc('check_slugs', { p_slugs: slugs })).map((r) => ({ slug: r.slug, available: r.available, reason: r.reason }))
     },
     async createFacility(p) {
-      const json = { ...toFacilityJson(p), slug: p.slug, courts: (p.courts || []).map((c) => ({ name: c.name, image_url: c.imageUrl || null })) }
+      const json = { ...toFacilityJson(p), slug: p.slug, courts: (p.courts || []).map((c) => ({ name: c.name, image_url: c.imageUrl || null, price_per_hour: c.pricePerHour ?? null })) }
       return mapFacility(check(await supabase.rpc('create_facility', { p: json })))
     },
     async updateFacility(fid, p) {
       return mapFacility(check(await supabase.rpc('update_facility', { p_fid: fid, p: toFacilityJson(p) })))
     },
-    async addCourt(fid, { name, imageUrl }) {
-      return mapCourt(check(await supabase.from('courts').insert({ facility_id: fid, name: name || null, image_url: imageUrl || null }).select().single()))
+    async addCourt(fid, { name, imageUrl, pricePerHour }) {
+      return mapCourt(check(await supabase.from('courts').insert({ facility_id: fid, name: name || null, image_url: imageUrl || null, price_per_hour: pricePerHour ?? null }).select().single()))
     },
     async updateCourt(id, patch) {
       const row = {}
       if (patch.name !== undefined) row.name = patch.name
       if (patch.imageUrl !== undefined) row.image_url = patch.imageUrl || null
       if (patch.isActive !== undefined) row.is_active = patch.isActive
+      if (patch.pricePerHour !== undefined) row.price_per_hour = patch.pricePerHour === '' ? null : patch.pricePerHour
       return mapCourt(check(await supabase.from('courts').update(row).eq('id', id).select().single()))
     },
     async removeCourt(id) {
       const { error } = await supabase.from('courts').delete().eq('id', id)
       if (error) throw new Error(error.code === '23503' ? 'court_in_use' : error.message)
+    },
+    // Images go to the public `facility-media` bucket under <facility-id>/ — Storage RLS only lets that facility's members write there.
+    async uploadImage(fid, file, kind = 'image') {
+      const { blob, type } = await prepareImage(file)
+      const path = `${fid}/${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
+      const { error } = await supabase.storage.from('facility-media').upload(path, blob, { contentType: type, upsert: false, cacheControl: '31536000' })
+      if (error) throw error
+      return supabase.storage.from('facility-media').getPublicUrl(path).data.publicUrl
+    },
+    async saveBanners(fid, banners) {
+      const rows = banners.map((b) => ({ image_url: b.imageUrl, heading: b.heading || null, description: b.description || null, cta_label: b.ctaLabel || null }))
+      return check(await supabase.rpc('save_facility_banners', { p_fid: fid, p: rows })).map(mapBanner)
     },
     // The secret goes to an Edge Function that validates it with Razorpay and stores it where
     // no browser role can read it. It is never saved in the facility row or in localStorage.

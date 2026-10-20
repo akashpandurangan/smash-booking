@@ -53,7 +53,7 @@ export default function OverviewPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-extrabold">Overview</h1>
+        <h1 className="text-3xl font-extrabold">Dashboard</h1>
         <p className="text-muted">{fmtDate(m.today, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
       </div>
 

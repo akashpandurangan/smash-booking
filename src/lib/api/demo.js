@@ -4,10 +4,13 @@
 // - Rules mirror supabase/migrations so behaviour matches the real backend.
 // - Storage is per-origin: a facility created on localhost is reachable at /book/<slug> on the same
 //   origin, but NOT at <slug>.localhost (a different origin has its own demo data).
-import { addDays, bookingSegments, toMin, todayISO, nowMinutes } from '../time.js'
+import { addDays, bookingSegments, fromMin, toMin, todayISO, nowMinutes } from '../time.js'
 import { TRANSITIONS, ACTIVE_STATUSES } from '../status.js'
 import { TENANT } from '../tenant.js'
 import { SLUG_RE } from '../slug.js'
+import { checkCoordinates, distanceKm, isValidMapsUrl } from '../maps.js'
+import { AMENITIES } from '../amenities.js'
+import { blobToDataUrl, prepareImage } from '../images.js'
 
 const KEY = 'badminton-demo-v6'
 const wait = (ms = 220) => new Promise((r) => setTimeout(r, ms))
@@ -18,6 +21,10 @@ const fail = (code) => {
 const RESERVED = new Set(['www', 'app', 'api', 'admin', 'owner', 'owners', 'platform', 'mail', 'smtp', 'ftp', 'dashboard', 'auth', 'login', 'register', 'signup', 'support', 'help', 'status', 'blog', 'docs', 'static', 'assets', 'cdn', 'dev', 'test', 'staging', 'smashbooking', 'smash', 'booking', 'bookings', 'localhost', 'vercel', 'supabase', 'root', 'null', 'undefined', 'f'])
 const clone = (x) => JSON.parse(JSON.stringify(x))
 
+const PROFILE_DEFAULTS = { description: '', locality: '', postalCode: '', mapsUrl: '', latitude: null, longitude: null, coverImageUrl: '', amenities: [] }
+const AMENITY_KEYS = new Set(AMENITIES.map((a) => a.key))
+const IMAGE_OK = /^(https:\/\/\S+|data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+)$/ // demo also accepts data: URLs (stored in this browser)
+
 function newFacility(over) {
   return {
     id: uid(), slug: '', name: '', tagline: 'Your Court. Your Game.', logoUrl: '', address: '', city: '', contactPhone: '', contactEmail: '',
@@ -25,7 +32,7 @@ function newFacility(over) {
     pricePerSlot: 150, maxSlotsPerBooking: 8, maxUnpaidHolds: 2, holdMinutes: 15, advanceBookingDays: 14, timezone: 'Asia/Kolkata',
     cancellationPolicy: 'Contact the facility to cancel a confirmed booking. Refund terms are set by the owner.',
     availableDurations: [1, 2, 3, 4], closedWeekdays: [], holidays: [], allowDemoPayments: true, paymentMode: 'none', razorpayKeyId: null,
-    createdBy: null, createdAt: new Date().toISOString(), ...over,
+    ...PROFILE_DEFAULTS, createdBy: null, createdAt: new Date().toISOString(), ...over,
   }
 }
 
@@ -68,12 +75,15 @@ function seed() {
   return {
     users, sessionUserId: null, facilities: [f1, f2], courts, bookings, blocks, audit: [],
     members: [{ facilityId: f1.id, userId: 'demo-owner', role: 'owner' }, { facilityId: f2.id, userId: 'demo-owner2', role: 'owner' }],
-    platformAdmins: ['demo-admin'],
+    platformAdmins: ['demo-admin'], banners: [],
     platformSettings: { require_facility_approval: false, max_facilities_per_owner: 1, max_courts_per_facility: 6 },
   }
 }
 
 let db = load() || seed()
+// state saved by an older build: fill in the fields added since (demo data only)
+db.banners = db.banners || []
+db.facilities.forEach((f) => Object.assign(f, { ...PROFILE_DEFAULTS, ...f }))
 function load() {
   try {
     const raw = localStorage.getItem(KEY)
@@ -175,7 +185,7 @@ function createCore({ facility: f, userId, courtIds, date, segments, name, phone
   const b = {
     id: uid(), facilityId: f.id, reference: 'BK-' + Array.from({ length: 6 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join(''),
     userId, courtIds: ids, date, start: segs[0].start, end: segs[segs.length - 1].end, segments: segs, customerName: name.trim(), customerPhone: phone, customerEmail: email || null,
-    totalAmount: f.pricePerSlot * slots * ids.length, status, paymentStatus: confirmed ? 'offline' : 'unpaid', paymentMethod: confirmed ? 'offline' : null,
+    totalAmount: ids.reduce((sum, id) => sum + courtSlotPrice(db.courts.find((c) => c.id === id), f), 0) * slots, status, paymentStatus: confirmed ? 'offline' : 'unpaid', paymentMethod: confirmed ? 'offline' : null,
     paidAt: null, needsRefund: false,
     expiresAt: status === 'pending_payment' ? new Date(now.getTime() + f.holdMinutes * 60000).toISOString() : null,
     confirmedAt: confirmed ? now.toISOString() : null, cancelledAt: null, cancellationReason: null,
@@ -185,6 +195,9 @@ function createCore({ facility: f, userId, courtIds, date, segments, name, phone
   return b
 }
 
+// price per 30-min slot: the court's own hourly price (/2) if set, else the facility's  (mirrors _create_order in SQL)
+const courtSlotPrice = (c, f) => (c?.pricePerHour != null ? Math.round((Number(c.pricePerHour) / 2) * 100) / 100 : f.pricePerSlot)
+
 const tenantFacility = () => db.facilities.find((f) => f.slug === TENANT.slug)
 
 function slugStatus(s) {
@@ -193,6 +206,24 @@ function slugStatus(s) {
   if (RESERVED.has(slug)) return { slug, available: false, reason: 'reserved' }
   if (db.facilities.some((f) => f.slug === slug)) return { slug, available: false, reason: 'taken' }
   return { slug, available: true, reason: null }
+}
+
+/** Mirrors _validate_profile() in SQL: every field that is present must be valid. */
+function validateProfile(p) {
+  if (String(p.description ?? '').length > 2000) fail('description_too_long')
+  if (String(p.locality ?? '').length > 80) fail('invalid_address')
+  if (String(p.postalCode ?? '').trim() && !/^[1-9][0-9]{5}$/.test(String(p.postalCode).trim())) fail('invalid_postal_code')
+  if (!isValidMapsUrl(p.mapsUrl)) fail('invalid_maps_url')
+  if (checkCoordinates(p.latitude, p.longitude)) fail('invalid_location')
+  const cover = String(p.coverImageUrl ?? '').trim()
+  if (cover && !IMAGE_OK.test(cover)) fail('invalid_image_url')
+  if (p.amenities !== undefined && (!Array.isArray(p.amenities) || p.amenities.some((a) => !AMENITY_KEYS.has(a)))) fail('invalid_amenities')
+}
+const cleanCoord = (v) => (String(v ?? '').trim() === '' ? null : Number(v))
+const courtPrice = (v) => {
+  if (v === undefined || v === null || String(v).trim() === '') return null
+  if (!/^[0-9]+(\.[0-9]{1,2})?$/.test(String(v).trim()) || Number(v) > 100000) fail('invalid_price')
+  return Number(v)
 }
 
 function validateFacilityInput(p, { partial = false } = {}) {
@@ -268,8 +299,57 @@ const rawApi = {
     return {
       state: f.status === 'active' ? 'live' : 'preview',
       settings: publicFacility(f),
-      courts: clone(db.courts.filter((c) => c.facilityId === f.id).sort((a, b) => a.number - b.number)),
+      courts: clone(db.courts.filter((c) => c.facilityId === f.id).sort((a, b) => a.number - b.number)).map((c) => ({ ...c, pricePerHour: c.pricePerHour ?? null })),
+      banners: clone(db.banners.filter((b) => b.facilityId === f.id).sort((a, b) => a.position - b.position)),
     }
+  },
+
+  /** Mirrors search_public_facilities() in SQL: active facilities only, availability from real bookings or null. */
+  async searchFacilities({ query, date, time, lat, lng } = {}) {
+    await wait(150)
+    expireStale()
+    const q = String(query || '').trim().toLowerCase()
+    const here = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null
+    const free = (c, d, s, e) => c.isActive
+      && !db.blocks.some((k) => k.courtId === c.id && k.date === d && overlaps(k.start, k.end, s, e))
+      && !db.bookings.some((b) => b.courtIds.includes(c.id) && b.date === d && ACTIVE_STATUSES.includes(b.status) && bookingSegments(b).some((o) => overlaps(o.start, o.end, s, e)))
+    const rows = db.facilities.filter((f) => f.status === 'active'
+      && (!q || [f.name, f.city, f.locality, f.address, f.postalCode].some((x) => String(x || '').toLowerCase().includes(q)))).map((f) => {
+      const courts = db.courts.filter((c) => c.facilityId === f.id && c.isActive)
+      const today = todayISO(f.timezone)
+      let availability = 'not_checked'
+      let freeHours = null
+      let courtsFreeAtTime = null
+      if (date) {
+        if (date < today || date > addDays(today, f.advanceBookingDays - 1)) availability = 'unverifiable'
+        else if (f.closedWeekdays.includes(new Date(`${date}T00:00:00`).getDay()) || f.holidays.includes(date)) availability = 'closed'
+        else {
+          availability = 'open'
+          const nowMin = date === today ? nowMinutes(f.timezone) : -1
+          let slots = 0
+          for (const c of courts) {
+            for (let t = toMin(f.openingTime); t + f.slotMinutes <= toMin(f.closingTime); t += f.slotMinutes) {
+              if (t > nowMin && free(c, date, fromMin(t), fromMin(t + f.slotMinutes))) slots++
+            }
+          }
+          freeHours = (slots * f.slotMinutes) / 60
+          if (time) {
+            const t0 = toMin(time)
+            courtsFreeAtTime = t0 < toMin(f.openingTime) || t0 + 60 > toMin(f.closingTime) || t0 <= nowMin ? 0
+              : courts.filter((c) => free(c, date, time, fromMin(t0 + 60))).length
+          }
+        }
+      }
+      const prices = courts.map((c) => (c.pricePerHour != null ? Number(c.pricePerHour) : f.pricePerSlot * 2))
+      return {
+        slug: f.slug, name: f.name, tagline: f.tagline, city: f.city, locality: f.locality, address: f.address, logoUrl: f.logoUrl, coverImageUrl: f.coverImageUrl,
+        amenities: f.amenities, mapsUrl: f.mapsUrl, latitude: f.latitude, longitude: f.longitude,
+        minPricePerHour: prices.length ? Math.min(...prices) : null, courtCount: courts.length,
+        distanceKm: here && f.latitude != null ? distanceKm(here.lat, here.lng, f.latitude, f.longitude) : null,
+        availability, freeHours, courtsFreeAtTime,
+      }
+    })
+    return rows.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity) || a.name.localeCompare(b.name)).slice(0, 60)
   },
 
   async publicFacilities() {
@@ -364,7 +444,11 @@ const rawApi = {
     async facility(fid) {
       await wait(120)
       requireMember(fid)
-      return { settings: clone(facilityById(fid)), courts: clone(db.courts.filter((c) => c.facilityId === fid).sort((a, b) => a.number - b.number)) }
+      return {
+        settings: clone(facilityById(fid)),
+        courts: clone(db.courts.filter((c) => c.facilityId === fid).sort((a, b) => a.number - b.number)).map((c) => ({ ...c, pricePerHour: c.pricePerHour ?? null })),
+        banners: clone(db.banners.filter((b) => b.facilityId === fid).sort((a, b) => a.position - b.position)),
+      }
     },
     async checkSlugs(slugs) {
       await wait(180)
@@ -377,6 +461,7 @@ const rawApi = {
       const limit = db.platformSettings.max_facilities_per_owner
       if (db.members.filter((m) => m.userId === u.id && m.role === 'owner').length >= limit) fail('facility_limit_reached')
       validateFacilityInput(p)
+      validateProfile(p)
       const s = slugStatus(p.slug)
       if (!s.available) fail(s.reason === 'taken' ? 'slug_taken' : s.reason === 'reserved' ? 'slug_reserved' : 'invalid_slug')
       if (String(p.address || '').trim().length < 3 || String(p.city || '').trim().length < 2) fail('invalid_address')
@@ -389,10 +474,12 @@ const rawApi = {
         pricePerSlot: Math.round((Number(p.pricePerHour) / 2) * 100) / 100, availableDurations: p.availableDurations, maxSlotsPerBooking: Math.max(...p.availableDurations) * 2,
         closedWeekdays: p.closedWeekdays || [], holidays: p.holidays || [], cancellationPolicy: p.cancellationPolicy?.trim() || 'Contact the facility to cancel a confirmed booking.',
         status: db.platformSettings.require_facility_approval ? 'pending' : 'active', maxCourts: db.platformSettings.max_courts_per_facility, allowDemoPayments: true, createdBy: u.id,
+        description: String(p.description || '').trim(), locality: String(p.locality || '').trim(), postalCode: String(p.postalCode || '').trim(), mapsUrl: String(p.mapsUrl || '').trim(),
+        latitude: cleanCoord(p.latitude), longitude: cleanCoord(p.longitude), coverImageUrl: String(p.coverImageUrl || '').trim(), amenities: [...new Set(p.amenities || [])].sort(),
       })
       db.facilities.push(f)
       db.members.push({ facilityId: f.id, userId: u.id, role: 'owner' })
-      courts.forEach((c, i) => db.courts.push({ id: `${f.id}-c${i + 1}`, facilityId: f.id, number: i + 1, name: c.name?.trim() || `Court ${i + 1}`, imageUrl: c.imageUrl || '', isActive: true }))
+      courts.forEach((c, i) => db.courts.push({ id: `${f.id}-c${i + 1}`, facilityId: f.id, number: i + 1, name: c.name?.trim() || `Court ${i + 1}`, imageUrl: c.imageUrl || '', isActive: true, pricePerHour: courtPrice(c.pricePerHour) }))
       audit(f.id, 'facility_created', 'facility', { slug: f.slug, status: f.status })
       save()
       return clone(f)
@@ -402,23 +489,25 @@ const rawApi = {
       requireMember(fid)
       const f = facilityById(fid)
       validateFacilityInput({ ...f, pricePerHour: f.pricePerSlot * 2, ...p }, { partial: true })
+      validateProfile(p)
       // slug, status, plan and maxCourts are intentionally NOT editable by owners
-      const allowed = ['name', 'tagline', 'logoUrl', 'address', 'city', 'contactPhone', 'contactEmail', 'openingTime', 'closingTime', 'availableDurations', 'maxUnpaidHolds', 'holdMinutes', 'advanceBookingDays', 'cancellationPolicy', 'closedWeekdays', 'holidays', 'allowDemoPayments']
-      for (const k of allowed) if (p[k] !== undefined) f[k] = p[k]
+      const allowed = ['name', 'tagline', 'logoUrl', 'address', 'city', 'contactPhone', 'contactEmail', 'openingTime', 'closingTime', 'availableDurations', 'maxUnpaidHolds', 'holdMinutes', 'advanceBookingDays', 'cancellationPolicy', 'closedWeekdays', 'holidays', 'allowDemoPayments', 'description', 'locality', 'postalCode', 'mapsUrl', 'coverImageUrl', 'amenities']
+      for (const k of allowed) if (p[k] !== undefined) f[k] = typeof p[k] === 'string' ? p[k].trim() : p[k]
+      if (p.latitude !== undefined || p.longitude !== undefined) { f.latitude = cleanCoord(p.latitude); f.longitude = cleanCoord(p.longitude) }
       if (p.pricePerHour !== undefined) f.pricePerSlot = Math.round((Number(p.pricePerHour) / 2) * 100) / 100
       if (p.availableDurations) f.maxSlotsPerBooking = Math.max(...p.availableDurations) * 2
       audit(fid, 'facility_updated', 'facility', { fields: Object.keys(p) })
       save()
       return clone(f)
     },
-    async addCourt(fid, { name, imageUrl }) {
+    async addCourt(fid, { name, imageUrl, pricePerHour }) {
       await wait(200)
       requireMember(fid)
       const f = facilityById(fid)
       const mine = db.courts.filter((c) => c.facilityId === fid)
       if (mine.length >= f.maxCourts) fail('court_limit_reached')
       const number = Math.max(0, ...mine.map((c) => c.number)) + 1
-      const c = { id: uid(), facilityId: fid, number, name: name?.trim() || `Court ${number}`, imageUrl: imageUrl || '', isActive: true }
+      const c = { id: uid(), facilityId: fid, number, name: name?.trim() || `Court ${number}`, imageUrl: imageUrl || '', isActive: true, pricePerHour: courtPrice(pricePerHour) }
       db.courts.push(c)
       save()
       return clone(c)
@@ -428,6 +517,7 @@ const rawApi = {
       const c = db.courts.find((x) => x.id === id) || fail('court_unavailable')
       requireMember(c.facilityId)
       for (const k of ['name', 'imageUrl', 'isActive']) if (patch[k] !== undefined) c[k] = patch[k]
+      if (patch.pricePerHour !== undefined) c.pricePerHour = courtPrice(patch.pricePerHour)
       save()
       return clone(c)
     },
@@ -438,6 +528,28 @@ const rawApi = {
       if (db.bookings.some((b) => b.courtIds.includes(id)) || db.blocks.some((k) => k.courtId === id)) fail('court_in_use')
       db.courts = db.courts.filter((x) => x.id !== id)
       save()
+    },
+    // demo only: images are kept as small data: URLs in this browser (the real backend uses Supabase Storage)
+    async uploadImage(fid, file) {
+      await wait(250)
+      requireMember(fid)
+      const { blob } = await prepareImage(file, { maxSide: 1280, quality: 0.78 })
+      return blobToDataUrl(blob)
+    },
+    async saveBanners(fid, banners) {
+      await wait(250)
+      requireMember(fid)
+      if (!Array.isArray(banners)) fail('invalid_banners')
+      if (banners.length > 3) fail('too_many_banners')
+      for (const b of banners) {
+        if (!IMAGE_OK.test(String(b.imageUrl || ''))) fail('invalid_image_url')
+        if (String(b.heading || '').length > 80 || String(b.description || '').length > 200 || String(b.ctaLabel || '').length > 30) fail('banner_text_too_long')
+      }
+      db.banners = db.banners.filter((b) => b.facilityId !== fid)
+      banners.forEach((b, i) => db.banners.push({ facilityId: fid, position: i, imageUrl: b.imageUrl, heading: b.heading || '', description: b.description || '', ctaLabel: b.ctaLabel || '' }))
+      audit(fid, 'banners_updated', 'facility', { count: banners.length })
+      save()
+      return clone(db.banners.filter((b) => b.facilityId === fid).sort((a, b) => a.position - b.position))
     },
     async savePaymentConfig(fid, { keyId, keySecret }) {
       await wait(500)

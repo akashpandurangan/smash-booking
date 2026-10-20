@@ -31,6 +31,18 @@ const MESSAGES = {
   block_conflicts_with_booking: 'There is an active booking in that time range. Cancel it first.',
   block_overlaps_block: 'That range overlaps an existing block.',
   invalid_status_transition: 'That status change is not allowed from the current state.',
+  invalid_maps_url: 'That doesn’t look like a Google Maps link. Open Google Maps, tap Share, and paste the https://maps.app.goo.gl/… (or google.com/maps) link.',
+  invalid_postal_code: 'Enter a valid 6-digit PIN code.',
+  invalid_location: 'Latitude and longitude must both be valid numbers (or both left empty).',
+  invalid_amenities: 'One of the selected amenities isn’t supported.',
+  description_too_long: 'The description is too long (2,000 characters at most).',
+  invalid_image_url: 'The image link must start with https://.',
+  invalid_image: 'That file isn’t a usable image. Use a JPG, PNG or WebP.',
+  image_too_large: 'That image is still too large after resizing. Try a smaller one.',
+  invalid_price: 'Enter a valid price (a number, 0 or more).',
+  too_many_banners: 'You can have at most 3 banners.',
+  banner_text_too_long: 'A banner’s heading (80), description (200) or button label (30) is too long.',
+  invalid_banners: 'Those banners couldn’t be saved.',
   invalid_credentials: 'Incorrect email or password.',
   'Invalid login credentials': 'Incorrect email or password.',
   'Email not confirmed': 'Please verify your email first — check your inbox for the confirmation link.',
@@ -42,6 +54,7 @@ export function friendlyError(err) {
   for (const [key, msg] of Object.entries(MESSAGES)) {
     if (raw.includes(key)) return msg
   }
+  if (/could not find the function|PGRST202/i.test(raw)) return 'This feature isn’t available yet — the latest database update hasn’t been applied. (Site owner: run the newest migration in supabase/migrations.)'
   if (/failed to fetch|network/i.test(raw)) return 'Network problem — check your connection and try again.'
   return raw || 'Something went wrong. Please try again.'
 }

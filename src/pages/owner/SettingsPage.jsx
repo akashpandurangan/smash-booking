@@ -6,6 +6,9 @@ import { isDemo } from '../../lib/config.js'
 import { friendlyError } from '../../lib/errors.js'
 import { WEEKDAYS, fmtDate, toMin } from '../../lib/time.js'
 import { Alert, Button, Field } from '../../components/ui.jsx'
+import ImagePicker from '../../components/ImagePicker.jsx'
+import ProfileFields from '../../components/ProfileFields.jsx'
+import { profileFrom, profilePayload, validateProfile } from '../../lib/profile.js'
 import { useAdmin } from './OwnerLayout.jsx'
 
 function Group({ title, children, note }) {
@@ -24,6 +27,7 @@ export default function SettingsPage() {
   const { reloadFacility } = useAdmin()
   const toast = useToast()
   const [f, setF] = useState(() => ({ ...settings, pricePerHour: settings.pricePerSlot * (60 / settings.slotMinutes) }))
+  const [p, setP] = useState(() => profileFrom(settings)) // about / location / amenities / cover
   const [errors, setErrors] = useState({})
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -45,6 +49,7 @@ export default function SettingsPage() {
     if (toMin(f.openingTime) >= toMin(f.closingTime)) v.closingTime = 'Closing time must be after opening time.'
     if (!f.availableDurations.length) v.durations = 'Offer at least one duration.'
     if (f.pricePerHour === '' || !(Number(f.pricePerHour) >= 0)) v.pricePerHour = 'Enter a price.'
+    Object.assign(v, validateProfile(p))
     setErrors(v)
     if (Object.keys(v).length) return
     setBusy(true); setErr('')
@@ -55,6 +60,7 @@ export default function SettingsPage() {
         openingTime: f.openingTime, closingTime: f.closingTime, availableDurations: f.availableDurations, pricePerHour: Number(f.pricePerHour),
         maxUnpaidHolds: Number(f.maxUnpaidHolds), holdMinutes: Number(f.holdMinutes), advanceBookingDays: Number(f.advanceBookingDays),
         cancellationPolicy: f.cancellationPolicy, closedWeekdays: f.closedWeekdays, holidays: f.holidays,
+        ...profilePayload(p),
       })
       await reloadFacility()
       toast('Settings saved')
@@ -74,6 +80,15 @@ export default function SettingsPage() {
         <Field label="Contact phone" error={errors.contactPhone}><input className="input" type="tel" value={f.contactPhone} onChange={set('contactPhone')} /></Field>
         <Field label="Contact email" error={errors.contactEmail}><input className="input" type="email" value={f.contactEmail} onChange={set('contactEmail')} /></Field>
         <Field label="Logo image link" error={errors.logoUrl} hint="An https link to your logo (shown in the header)."><input className="input" value={f.logoUrl} onChange={set('logoUrl')} placeholder="https://…" /></Field>
+      </Group>
+
+      <Group title="About, location & photo" note="Shown on your booking page and in search results. Only facilities that are published appear in search.">
+        <div className="sm:col-span-2">
+          <ImagePicker label="Cover photo" value={p.coverImageUrl} upload={(file) => api.owner.uploadImage(settings.id, file, 'cover')}
+            onUploaded={(url) => setP((x) => ({ ...x, coverImageUrl: url }))} onRemove={() => setP((x) => ({ ...x, coverImageUrl: '' }))}
+            hint="Shown on your facility card and page. Use a real photo of your courts — the card shows “Photo not added yet” until you add one." />
+        </div>
+        <ProfileFields value={p} onChange={(patch) => setP((x) => ({ ...x, ...patch }))} errors={errors} />
       </Group>
 
       <Group title="Opening hours & durations" note="Players pick a whole-hour start time from these hours.">
@@ -120,7 +135,7 @@ export default function SettingsPage() {
 
       <Group title="Cancellation rules">
         <Field label="Shown to players on their booking" className="sm:col-span-2"><textarea className="input min-h-24" value={f.cancellationPolicy} onChange={set('cancellationPolicy')} /></Field>
-        {isDemo && <Alert tone="info" className="sm:col-span-2">Demo mode: changes are kept only in this browser tab.</Alert>}
+        {isDemo && <Alert tone="info" className="sm:col-span-2">Demo mode: changes are kept only in this browser (not on a server).</Alert>}
       </Group>
 
       <div className="sticky bottom-0 -mx-4 border-t border-line bg-paper/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">

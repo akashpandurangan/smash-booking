@@ -29,7 +29,11 @@ await t('Project reachable and key accepted (Auth)', async () => { const r = awa
 await t('Database migrations applied (list_public_facilities)', async () => {
   const r = await fetch(`${url}/rest/v1/rpc/list_public_facilities`, { method: 'POST', headers, body: '{}' })
   if (r.ok) return [true, `${(await r.json()).length} live facilities`]
-  return [false, r.status === 404 ? 'not found — run supabase/migrations 0001–0007 in the SQL editor' : `HTTP ${r.status}`]
+  return [false, r.status === 404 ? 'not found — run supabase/migrations 0001–0008 in the SQL editor' : `HTTP ${r.status}`]
+})
+await t('Marketplace migration applied (search_public_facilities)', async () => {
+  const r = await fetch(`${url}/rest/v1/rpc/search_public_facilities`, { method: 'POST', headers, body: '{}' })
+  return [r.ok, r.ok ? '' : r.status === 404 ? 'not found — run supabase/migrations/0008_marketplace.sql' : `HTTP ${r.status}`]
 })
 console.log(bad ? '\nSome checks failed.' : '\nSupabase is connected.')
 process.exit(bad ? 1 : 0)

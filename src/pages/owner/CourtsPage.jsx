@@ -20,18 +20,21 @@ export default function CourtsPage() {
   const [busy, setBusy] = useState(false)
   const [removing, setRemoving] = useState(null)
   const [removingCourt, setRemovingCourt] = useState(null)
-  const [newCourt, setNewCourt] = useState({ name: '', imageUrl: '' })
+  const [newCourt, setNewCourt] = useState({ name: '', imageUrl: '', price: '' })
   const [edits, setEdits] = useState({}) // courtId → { name, imageUrl }
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
 
+  const priceOf = (v) => (String(v).trim() === '' ? null : Number(v))
+  const badPrice = (v) => String(v).trim() !== '' && !(Number(v) >= 0 && Number(v) <= 100000)
   const saveCourt = async (c) => {
     const e = edits[c.id]
     if (!e) return
     setCourtErr('')
     if (!e.name.trim()) { setCourtErr('A court needs a name.'); return }
     if (e.imageUrl && !/^https:\/\//.test(e.imageUrl.trim())) { setCourtErr('Court images must be https:// links.'); return }
+    if (badPrice(e.price)) { setCourtErr('Enter a valid price per hour, or leave it empty to use the facility price.'); return }
     try {
-      await api.owner.updateCourt(c.id, { name: e.name.trim(), imageUrl: e.imageUrl.trim() })
+      await api.owner.updateCourt(c.id, { name: e.name.trim(), imageUrl: e.imageUrl.trim(), pricePerHour: priceOf(e.price) })
       setEdits(({ [c.id]: _gone, ...rest }) => rest)
       toast('Court updated')
       reloadFacility()
@@ -40,9 +43,10 @@ export default function CourtsPage() {
   const addCourt = async () => {
     setCourtErr('')
     if (newCourt.imageUrl && !/^https:\/\//.test(newCourt.imageUrl.trim())) { setCourtErr('Court images must be https:// links.'); return }
+    if (badPrice(newCourt.price)) { setCourtErr('Enter a valid price per hour, or leave it empty to use the facility price.'); return }
     try {
-      await api.owner.addCourt(settings.id, { name: newCourt.name.trim(), imageUrl: newCourt.imageUrl.trim() })
-      setNewCourt({ name: '', imageUrl: '' })
+      await api.owner.addCourt(settings.id, { name: newCourt.name.trim(), imageUrl: newCourt.imageUrl.trim(), pricePerHour: priceOf(newCourt.price) })
+      setNewCourt({ name: '', imageUrl: '', price: '' })
       toast('Court added')
       reloadFacility()
     } catch (x) { setCourtErr(friendlyError(x)) }
@@ -69,21 +73,22 @@ export default function CourtsPage() {
 
   return (
     <div className="space-y-8">
-      <div><h1 className="text-3xl font-extrabold">Courts & blocks</h1><p className="text-muted">Manage your courts, and take a court out of service for maintenance or private use.</p></div>
+      <div><h1 className="text-3xl font-extrabold">Courts & blocks</h1><p className="text-muted">Manage your courts and their prices, and take a court out of service for maintenance or private use. A court with no price of its own uses your facility price (₹{settings.pricePerSlot * 2}/hour).</p></div>
 
       <section className="card p-5" aria-labelledby="courts-h">
         <div className="flex items-baseline justify-between gap-3"><h2 id="courts-h" className="text-lg font-bold">Your courts</h2><span className="text-sm text-muted">{courts.length} of {settings.maxCourts} on your plan</span></div>
         {courtErr && <Alert tone="error" className="mt-3">{courtErr}</Alert>}
         <ul className="mt-4 space-y-3">
           {courts.map((c) => {
-            const e = edits[c.id] || { name: c.name, imageUrl: c.imageUrl }
-            const dirty = edits[c.id] && (e.name !== c.name || e.imageUrl !== c.imageUrl)
+            const e = edits[c.id] || { name: c.name, imageUrl: c.imageUrl, price: c.pricePerHour ?? '' }
+            const dirty = edits[c.id] && (e.name !== c.name || e.imageUrl !== c.imageUrl || String(e.price) !== String(c.pricePerHour ?? ''))
             return (
               <li key={c.id} className="rounded-2xl border border-line p-3 sm:p-4">
-                <div className="grid gap-3 sm:grid-cols-[auto_1fr_1.3fr_auto] sm:items-end">
+                <div className="grid gap-3 sm:grid-cols-[auto_1fr_1.3fr_8.5rem_auto] sm:items-end">
                   <div className="grid size-12 place-items-center overflow-hidden rounded-xl bg-paper text-muted">{c.imageUrl ? <img src={c.imageUrl} alt="" className="size-full object-cover" /> : <ImageOff className="size-5" aria-hidden />}</div>
                   <Field label="Name"><input className="input" value={e.name} onChange={(ev) => setEdits({ ...edits, [c.id]: { ...e, name: ev.target.value } })} /></Field>
                   <Field label="Image link (optional)"><input className="input" value={e.imageUrl} placeholder="https://…" onChange={(ev) => setEdits({ ...edits, [c.id]: { ...e, imageUrl: ev.target.value } })} /></Field>
+                  <Field label="Price / hour (₹)" hint={c.pricePerHour == null ? 'Facility price' : undefined}><input className="input" type="number" min="0" step="10" inputMode="decimal" value={e.price} placeholder={String(settings.pricePerSlot * 2)} onChange={(ev) => setEdits({ ...edits, [c.id]: { ...e, price: ev.target.value } })} /></Field>
                   <div className="flex flex-wrap gap-2">
                     {dirty && <Button size="sm" onClick={() => saveCourt(c)}>Save</Button>}
                     <Button size="sm" variant="outline" onClick={() => toggleActive(c)}>{c.isActive ? 'Hide' : 'Show'}</Button>
@@ -95,9 +100,10 @@ export default function CourtsPage() {
             )
           })}
         </ul>
-        <div className="mt-4 grid gap-3 rounded-2xl bg-paper p-3 sm:grid-cols-[1fr_1.3fr_auto] sm:items-end sm:p-4">
+        <div className="mt-4 grid gap-3 rounded-2xl bg-paper p-3 sm:grid-cols-[1fr_1.3fr_8.5rem_auto] sm:items-end sm:p-4">
           <Field label="New court name"><input className="input" value={newCourt.name} onChange={(e) => setNewCourt({ ...newCourt, name: e.target.value })} placeholder={`Court ${Math.max(0, ...courts.map((c) => c.number)) + 1}`} /></Field>
           <Field label="Image link (optional)"><input className="input" value={newCourt.imageUrl} onChange={(e) => setNewCourt({ ...newCourt, imageUrl: e.target.value })} placeholder="https://…" /></Field>
+          <Field label="Price / hour (₹)"><input className="input" type="number" min="0" step="10" inputMode="decimal" value={newCourt.price} placeholder={String(settings.pricePerSlot * 2)} onChange={(e) => setNewCourt({ ...newCourt, price: e.target.value })} /></Field>
           <Button onClick={addCourt} disabled={courts.length >= settings.maxCourts}><Plus className="size-4" aria-hidden />Add court</Button>
         </div>
         {courts.length >= settings.maxCourts && <p className="mt-2 text-sm text-muted">You’ve reached your plan’s court limit. Contact the platform team to raise it.</p>}
