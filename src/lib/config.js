@@ -1,6 +1,6 @@
 // Public configuration only. NEVER put a Supabase service_role key in a VITE_ variable.
 const url = (import.meta.env.VITE_SUPABASE_URL || '').trim()
-const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
+const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim() // new-style publishable keys (sb_publishable_…) work the same as the legacy anon key
 
 export const supabaseConfigured = /^https?:\/\//.test(url) && anonKey.length > 20
 export const isDemo = !supabaseConfigured

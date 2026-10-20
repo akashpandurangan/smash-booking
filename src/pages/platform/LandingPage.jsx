@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, CalendarCheck, CreditCard, Globe, LayoutDashboard, MapPin, ShieldCheck } from 'lucide-react'
 import { api } from '../../lib/api/index.js'
 import { LOGO_URL, PLATFORM_NAME } from '../../lib/config.js'
-import { ROOT_DOMAIN, bookingUrl } from '../../lib/tenant.js'
+import { ROOT_DOMAIN, workingUrl } from '../../lib/tenant.js'
 import { Button, EmptyState, Skeleton } from '../../components/ui.jsx'
 import { CourtIllustration } from '../../components/Bits.jsx'
 
@@ -56,7 +56,7 @@ export default function LandingPage() {
           {!list ? Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-28" />)
             : !list.length ? <div className="sm:col-span-2 lg:col-span-3"><EmptyState icon={MapPin} title="No facilities yet" action={<Button to="/owner/register">Be the first</Button>}>Facilities appear here once they go live.</EmptyState></div>
             : list.map((f) => (
-              <a key={f.slug} href={bookingUrl(f.slug)} className="card group flex items-center gap-4 p-4 transition-all hover:-translate-y-0.5 hover:shadow-lift">
+              <a key={f.slug} href={workingUrl(f.slug)} className="card group flex items-center gap-4 p-4 transition-all hover:-translate-y-0.5 hover:shadow-lift">
                 <img src={f.logoUrl || LOGO_URL} alt="" className="size-14 shrink-0 rounded-2xl bg-white object-cover" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-display text-lg font-bold">{f.name}</p>

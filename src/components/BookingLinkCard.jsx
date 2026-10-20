@@ -1,8 +1,8 @@
 import { Clock, PauseCircle, Settings2 } from 'lucide-react'
 import { FACILITY_STATUS } from '../lib/status.js'
-import { bookingUrl, workingUrl } from '../lib/tenant.js'
+import { bookingLink, workingUrl } from '../lib/tenant.js'
 import { Alert, Badge, Button, Skeleton } from './ui.jsx'
-import LinkActions from './LinkActions.jsx'
+import LinkActions, { LinkNote } from './LinkActions.jsx'
 
 /** What is still missing before a facility can take bookings, and where to fix it. */
 export function setupGaps(settings, courts) {
@@ -23,7 +23,7 @@ export default function BookingLinkCard({ settings, courts, className = '' }) {
   if (!settings) return <Skeleton className={`h-40 ${className}`} />
   const gaps = setupGaps(settings, courts)
   const st = FACILITY_STATUS[settings.status]
-  const url = bookingUrl(settings.slug)
+  const url = bookingLink(settings.slug).url
 
   return (
     <section className={`card p-4 sm:p-5 ${className}`} aria-label="Your Booking Link">
@@ -44,7 +44,10 @@ export default function BookingLinkCard({ settings, courts, className = '' }) {
         <>
           <p className="mt-0.5 break-all font-display text-xl font-bold">{url}</p>
           {settings.status === 'active' ? (
-            <LinkActions className="mt-3" url={url} previewUrl={workingUrl(settings.slug)} name={settings.name} />
+            <>
+              <LinkNote slug={settings.slug} className="mt-2" />
+              <LinkActions className="mt-3" slug={settings.slug} name={settings.name} />
+            </>
           ) : (
             <>
               <p className="mt-2 flex items-start gap-2 text-sm text-muted">

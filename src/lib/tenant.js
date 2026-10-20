@@ -1,4 +1,5 @@
 import { isDemo } from './config.js'
+import { bookingLinkFor } from './links.js'
 
 // Hostname-based tenant resolution. ONE shared app serves every facility.
 //
@@ -57,15 +58,19 @@ export const isTenantSite = TENANT.mode !== 'platform'
 const origin = () => window.location.origin
 const isLocalHost = () => /(^|\.)localhost$/.test(window.location.hostname)
 
-/** Link that works RIGHT NOW (no custom domain needed): /book/<slug> on the current origin. */
+/**
+ * The owner-facing booking link for the CURRENT environment, plus whether it may be shared.
+ * Never presents a localhost / demo URL as public, and never presents `<slug>.smashbooking.com`
+ * until VITE_WILDCARD_DOMAIN_READY=true (set only after DNS + Vercel are configured).
+ */
+export const bookingLink = (slug) =>
+  bookingLinkFor(slug, { origin: origin(), hostname: window.location.hostname, demo: isDemo, wildcardReady: WILDCARD_READY, rootDomain: ROOT_DOMAIN })
+
+/** Opens the facility's booking page in THIS environment (always works where the app is running). */
 export const workingUrl = (slug) => `${origin()}/book/${slug}`
-/** The branded subdomain URL (only live once DNS + Vercel are configured). */
-export function subdomainUrl(slug) {
-  if (isLocalHost()) return `${window.location.protocol}//${slug}.localhost${window.location.port ? `:${window.location.port}` : ''}`
-  return `https://${slug}.${ROOT_DOMAIN}`
-}
-/** The URL we show owners as THE booking link: subdomain once the domain is connected, else the working link. */
-export const bookingUrl = (slug) => (!isDemo && (WILDCARD_READY || isLocalHost()) ? subdomainUrl(slug) : workingUrl(slug))
+/** The branded subdomain (production form). Only live once wildcard DNS + Vercel are configured. */
+export const subdomainUrl = (slug) => `https://${slug}.${ROOT_DOMAIN}`
+export const bookingUrl = (slug) => bookingLink(slug).url
 
 /** URL of a platform page (owner login, dashboard…) from anywhere, including a tenant subdomain. */
 export function platformUrl(path = '/') {

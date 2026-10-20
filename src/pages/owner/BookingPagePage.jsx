@@ -3,7 +3,7 @@ import { CheckCircle2, Clock, Globe, MessageCircle, ShieldAlert } from 'lucide-r
 import { useFacility, useToast } from '../../context/contexts.js'
 import { api } from '../../lib/api/index.js'
 import { friendlyError } from '../../lib/errors.js'
-import { ROOT_DOMAIN, WILDCARD_READY, bookingUrl, subdomainUrl, workingUrl } from '../../lib/tenant.js'
+import { ROOT_DOMAIN, WILDCARD_READY, bookingLink, subdomainUrl } from '../../lib/tenant.js'
 import { Alert, Button, Field } from '../../components/ui.jsx'
 import BookingLinkCard from '../../components/BookingLinkCard.jsx'
 import { LOGO_URL } from '../../lib/config.js'
@@ -17,7 +17,8 @@ export default function BookingPagePage() {
   const [b, setB] = useState({ logoUrl: settings.logoUrl, tagline: settings.tagline })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
-  const url = bookingUrl(settings.slug)
+  const link = bookingLink(settings.slug)
+  const url = link.url
   const live = settings.status === 'active'
   const brandedLive = live && WILDCARD_READY
 
@@ -34,7 +35,7 @@ export default function BookingPagePage() {
       <div><h1 className="text-3xl font-extrabold">Booking page</h1><p className="text-muted">Your public booking website: link, status and branding.</p></div>
 
       <BookingLinkCard settings={settings} courts={courts} />
-      {settings.status === 'active' && (
+      {settings.status === 'active' && link.shareable && (
         <a className="-mt-3 inline-flex items-center gap-2 text-sm font-semibold text-forest-600 hover:underline" target="_blank" rel="noreferrer"
           href={`https://wa.me/?text=${encodeURIComponent(`Book a badminton court at ${settings.name}: ${url}`)}`}><MessageCircle className="size-4" aria-hidden />Share on WhatsApp</a>
       )}
@@ -45,7 +46,7 @@ export default function BookingPagePage() {
           <li className="flex gap-3"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" aria-hidden /><span><strong>Address reserved:</strong> <code>{settings.slug}.{ROOT_DOMAIN}</code> belongs to you. Nobody else can register it.</span></li>
           <li className="flex gap-3">{live ? <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" aria-hidden /> : <Clock className="mt-0.5 size-5 shrink-0 text-amber-600" aria-hidden />}<span><strong>Booking page:</strong> {live ? 'live and accepting bookings.' : settings.status === 'pending' ? 'waiting for platform approval.' : settings.status === 'suspended' ? 'suspended by the platform.' : 'not live yet.'}</span></li>
           <li className="flex gap-3">{brandedLive ? <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" aria-hidden /> : <Clock className="mt-0.5 size-5 shrink-0 text-amber-600" aria-hidden />}
-            <span><strong>Branded subdomain:</strong> {WILDCARD_READY ? <>connected — <a className="underline" href={subdomainUrl(settings.slug)}>{subdomainUrl(settings.slug)}</a></> : <>not connected yet. Until the platform connects <code>{ROOT_DOMAIN}</code>, use your working link: <a className="break-all underline" href={workingUrl(settings.slug)}>{workingUrl(settings.slug)}</a>. Nothing to do on your side.</>}</span></li>
+            <span><strong>Branded subdomain:</strong> {WILDCARD_READY ? <>connected — <a className="underline" href={subdomainUrl(settings.slug)}>{subdomainUrl(settings.slug)}</a></> : <>not connected yet. Until the platform connects <code>{ROOT_DOMAIN}</code>, your booking link above is the one to use{link.shareable ? '' : ' (it becomes shareable once this app is deployed)'}. Nothing to do on your side.</>}</span></li>
         </ul>
         {!live && <Alert tone="warn" className="mt-4" title="Players can’t see your page yet">Only you can preview it. {settings.status === 'pending' ? 'You’ll go live as soon as a platform administrator approves your facility.' : ''}</Alert>}
         <p className="mt-4 flex gap-2 text-xs text-muted"><ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />Your web address can only be changed by a platform administrator, so shared links never break unexpectedly.</p>

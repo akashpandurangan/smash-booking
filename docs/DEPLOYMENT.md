@@ -22,7 +22,7 @@ The slug is only a lookup key. `get_facility_public(slug)` returns the facility 
 
 1. Create a project (free tier is fine).
 2. SQL editor → run, **in order**:
-   `0001_schema.sql` → `0002_orders_razorpay.sql` → `0003_multi_slot.sql` → `0004_segments.sql` → `0005_max_slots_8.sql` → **`0006_multitenant.sql`** → (optional) `seed.sql` is no longer needed — facilities create their own courts.
+   `0001_schema.sql` → `0002_orders_razorpay.sql` → `0003_multi_slot.sql` → `0004_segments.sql` → `0005_max_slots_8.sql` → **`0006_multitenant.sql`** → **`0007_player_court_read.sql`** → (optional) `seed.sql` is no longer needed — facilities create their own courts.
    *Upgrading an existing deployment?* `0006` migrates your single facility into the new model as slug `smash-booking`, keeps all bookings, and turns former global owners into that facility's owner. **Nobody becomes a platform admin by migration.** Its Razorpay is **not** carried over — see section 5.
 3. **Create the first platform administrator** (once, by you, after registering normally at `/owner/register`):
    ```sql
@@ -67,6 +67,16 @@ Leave the Supabase variables empty to run in **demo mode** (local sample data, p
 1. Push this branch to GitHub and import/redeploy the project (framework: Vite, build `npm run build`, output `dist` — also set in `vercel.json`).
 2. Add the env vars above (Settings → Environment Variables) and redeploy.
 3. **Test now, without the domain:** open `https://smash-booking-pink.vercel.app/` (platform) and `https://smash-booking-pink.vercel.app/book/<slug>` (a facility). The whole product works this way.
+
+### Which link does the dashboard show?
+| Where you are | Link shown | Shareable? |
+|---|---|---|
+| `localhost`, `*.localhost`, LAN IPs | `http://localhost:5173/book/<slug>` labelled **Local only** | No — Share is disabled |
+| Deployed demo mode (no Supabase vars) | `https://<site>/book/<slug>` labelled **Local only** (data lives in one browser) | No |
+| Deployed with Supabase, wildcard not ready | `https://<your-vercel-domain>/book/<slug>` | **Yes** |
+| Deployed, `VITE_WILDCARD_DOMAIN_READY=true` | `https://<slug>.smashbooking.com` (Preview still uses `/book/<slug>`) | Yes |
+
+Before you can share a real public link, in Vercel (Project → Settings → Environment Variables, **Production**): set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (or `VITE_SUPABASE_ANON_KEY`), then **redeploy** (Vite bakes them in at build time). In Supabase → Authentication → URL Configuration add your Vercel URL (`https://smash-booking-pink.vercel.app/**`) as a redirect URL and set it as the Site URL. No other Vercel setting is needed for `/book/<slug>` — `vercel.json` already rewrites every path to the app.
 
 ## 4. Connect `smashbooking.com` + wildcard subdomains
 

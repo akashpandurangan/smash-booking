@@ -5,10 +5,10 @@ import { useAuth } from '../../context/contexts.js'
 import { api } from '../../lib/api/index.js'
 import { friendlyError } from '../../lib/errors.js'
 import { cleanSlugInput, isValidSlug, slugCandidates } from '../../lib/slug.js'
-import { ROOT_DOMAIN, bookingUrl, workingUrl } from '../../lib/tenant.js'
+import { ROOT_DOMAIN, bookingUrl } from '../../lib/tenant.js'
 import { WEEKDAYS, fmt12, fmtDate, money, toMin } from '../../lib/time.js'
 import { Alert, Badge, Button, Field, Skeleton } from '../../components/ui.jsx'
-import LinkActions from '../../components/LinkActions.jsx'
+import LinkActions, { LinkNote } from '../../components/LinkActions.jsx'
 import { LOGO_URL } from '../../lib/config.js'
 
 const STEPS = ['Facility', 'Web address', 'Courts', 'Hours & pricing', 'Payments', 'Review']
@@ -169,9 +169,9 @@ export default function SetupWizard() {
           <div className="mt-6 rounded-2xl bg-forest-900 p-5 text-left text-white">
             <p className="text-xs uppercase tracking-wider text-white/60">Your booking link</p>
             <p className="mt-1 break-all font-display text-xl font-bold text-volt-400">{bookingUrl(f.slug)}</p>
-            <p className="mt-3 text-xs text-white/70">Branded address once your domain is connected: <span className="font-semibold text-white">{f.slug}.{ROOT_DOMAIN}</span></p>
+            <LinkNote slug={f.slug} className="mt-3 text-white/80" />
           </div>
-          <LinkActions className="mt-4 justify-center" url={bookingUrl(f.slug)} previewUrl={workingUrl(f.slug)} name={f.name} />
+          <LinkActions className="mt-4 justify-center" slug={f.slug} name={f.name} />
           {submit.warning && <Alert tone="warn" className="mt-4 text-left">{submit.warning}</Alert>}
           <Button size="lg" className="mt-6 w-full" onClick={() => nav('/owner', { replace: true })}>Go to my dashboard <ArrowRight className="size-4" aria-hidden /></Button>
         </div>
@@ -255,7 +255,7 @@ export default function SetupWizard() {
                   </div>
                 )}
                 <Alert tone="info" title="How your link works">
-                  Your branded address is <strong>{form.slug || 'yourname'}.{ROOT_DOMAIN}</strong> once the domain is connected by the platform. Until then your booking page works at <strong className="break-all">{workingUrl(form.slug || 'yourname')}</strong>.
+                  Your branded address is <strong>{form.slug || 'yourname'}.{ROOT_DOMAIN}</strong> once the domain is connected by the platform. Until then your booking page lives at <strong className="break-all">/book/{form.slug || 'yourname'}</strong> on this site — you’ll get the full shareable link when setup finishes.
                   The address is reserved for you and can only be changed by a platform administrator.
                 </Alert>
               </div>

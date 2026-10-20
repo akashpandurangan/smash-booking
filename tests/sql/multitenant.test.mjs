@@ -30,7 +30,7 @@ console.log('A. Upgrading an existing single-facility database')
 }
 
 // ------------------------------------------------------------------ B. fresh multi-tenant
-const db = await makeDb({ upTo: 6 })
+const db = await makeDb({ upTo: 7 })
 const ownerA = await seedUser(db, 'a@x.com', { full_name: 'Alice Owner', phone: '9000000001' })
 const ownerB = await seedUser(db, 'b@x.com')
 const ownerC = await seedUser(db, 'c@x.com')
@@ -171,6 +171,19 @@ ok((await as(db, 'anon', () => db.query("select get_facility_public('newplace') 
 const audit = (await call(root, 'select count(*)::int n from audit_events')).rows[0].n
 ok(audit > 5, `audit trail recorded (${audit} events)`)
 ok((await call(ownerA, 'select count(*)::int n from audit_events')).rows[0].n > 0 && (await call(ownerA, 'select count(*)::int n from audit_events where facility_id <> $1', [fa.id])).rows[0].n === 0, 'owner sees only their own facility audit events')
+
+console.log('B9. Players read only the courts of their own bookings (0007)')
+{
+  const visible = (uid) => call(uid, 'select id from courts')
+  const newcomer = await seedUser(db, 'newcomer@x.com')
+  ok((await visible(newcomer)).rows.length === 0, 'a player with no bookings sees no courts directly (cannot browse other facilities)')
+  const bobSees = (await visible(bob)).rows.map((r) => r.id)
+  const bobBooked = (await call(bob, 'select distinct court_id from bookings')).rows.map((r) => r.court_id)
+  ok(bobSees.length > 0 && bobSees.every((id) => bobBooked.includes(id)), 'a player sees exactly the courts they booked')
+  ok((await call(bob, 'select count(*)::int n from bookings b join courts c on c.id = b.court_id')).rows[0].n > 0, 'bookings → courts join works for the player (court number shows)')
+  await call(bob, "update courts set name = 'Hacked'").catch(() => {})
+  ok((await db.query("select count(*)::int n from courts where name = 'Hacked'")).rows[0].n === 0, 'a player still cannot rename courts')
+}
 
 console.log(fails ? `\n${fails} CHECK(S) FAILED` : '\nALL SQL CHECKS PASSED')
 process.exit(fails ? 1 : 0)
