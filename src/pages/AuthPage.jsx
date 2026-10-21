@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react
 import { ArrowLeft, FlaskConical, KeyRound, MailCheck, ShieldCheck } from 'lucide-react'
 import { useAuth, useFacility } from '../context/contexts.js'
 import { friendlyError } from '../lib/errors.js'
-import { isDemo } from '../lib/config.js'
+import { demoHint, isDemo } from '../lib/config.js'
 import { Alert, Button, Field } from '../components/ui.jsx'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -66,7 +66,7 @@ export default function AuthPage() {
 
   const demoLogin = async (role) => {
     await quickLogin(role)
-    nav(role === 'owner' ? '/admin' : next, { replace: true })
+    nav(next, { replace: true })
   }
 
   if (done) {
@@ -102,9 +102,9 @@ export default function AuthPage() {
         <div className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4">
           <p className="flex items-center gap-2 text-sm font-bold text-amber-900"><FlaskConical className="size-4" aria-hidden />Demo mode — no real accounts</p>
           <p className="mt-1 text-sm text-amber-900/80">Skip the form and explore with a pretend account. Nothing is sent anywhere.</p>
+          {demoHint && <p className="mt-1 text-xs text-amber-900" role="note">{demoHint}</p>}
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <Button variant="dark" size="sm" onClick={() => demoLogin('customer')}>Demo customer</Button>
-            <Button variant="outline" size="sm" onClick={() => demoLogin('owner')}>Demo owner</Button>
+            <Button variant="dark" size="sm" className="col-span-2" onClick={() => demoLogin('customer')}>Continue as demo player</Button>
           </div>
         </div>
       )}

@@ -6,7 +6,10 @@ import { api } from '../lib/api/index.js'
 import { friendlyError } from '../lib/errors.js'
 import { courtState } from '../lib/availability.js'
 import { HERO_IMAGE_URL } from '../lib/config.js'
-import { addDays, fmt12, fmtDate, fmtDateLong, fmtDuration, fmtRange, fmtRangeShort, fromMin, mergeSlots, money, nowMinutes, toMin, todayISO } from '../lib/time.js'
+import { courtSlotPrice, hourlyRange, orderTotal } from '../lib/pricing.js'
+import BannerCarousel from '../components/BannerCarousel.jsx'
+import FacilityDetails from '../components/FacilityDetails.jsx'
+import { addDays, fmt12, fmtDate, fmtDateLong, fmtDuration, fmtRange, fmtRangeShort, fromMin, isClosedDay, mergeSlots, money, nowMinutes, toMin, todayISO } from '../lib/time.js'
 import { Alert, Badge, Button, Skeleton } from '../components/ui.jsx'
 import { CourtIllustration } from '../components/Bits.jsx'
 import CalendarPopup from '../components/Calendar.jsx'
@@ -14,7 +17,6 @@ import { saveDraft } from '../lib/draft.js'
 
 const STRIP_DAYS = 7
 const UNIT = 60 // time slots are shown as 1-hour windows (pricing stays per 30-minute slot)
-const DURATIONS = [1, 2, 3, 4] // hours
 
 const COURT_STYLE = {
   available: { badge: <Badge tone="lime">Available</Badge>, cls: 'border-line bg-white hover:border-forest-600 hover:shadow-card' },
@@ -44,13 +46,13 @@ function Section({ step, title, right, children }) {
 }
 
 export default function BookPage() {
-  const { settings, courts, loading: facLoading, error: facError, reload } = useFacility()
+  const { settings, courts, banners = [], loading: facLoading, error: facError, reload } = useFacility()
   const { user } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
 
   const [date, setDate] = useState(null) // null = today
-  const [dur, setDur] = useState(1) // hours
+  const [durChoice, setDurChoice] = useState(1) // hours (the owner decides which durations exist)
   const [start, setStart] = useState(null) // index of the first 1-hour window
   const [picked, setPicked] = useState(null) // null = automatic (first free court); array = user's choice
   const [calendarOpen, setCalendarOpen] = useState(false)
@@ -59,7 +61,11 @@ export default function BookPage() {
   const [busyError, setBusyError] = useState('')
 
   const today = settings ? todayISO(settings.timezone) : null
-  const effectiveDate = date || today
+  // default = today, or the first open day if today is a weekly day off / holiday
+  const firstOpen = settings ? Array.from({ length: settings.advanceBookingDays }, (_, k) => addDays(today, k)).find((d) => !isClosedDay(settings, d)) : null
+  const effectiveDate = date || firstOpen || today
+  const offered = (settings?.availableDurations?.length ? settings.availableDurations : [1, 2, 3, 4]).slice().sort((a, b) => a - b)
+  const dur = offered.includes(durChoice) ? durChoice : offered[0]
 
   const loadBusy = useCallback(async (d, quiet) => {
     if (!d) return
@@ -145,11 +151,11 @@ export default function BookPage() {
   const segments = valid ? mergeSlots(inRange.map((i) => windows[i])) : []
   const baseSlots = dur * slotsPerWindow
   const minutes = dur * UNIT
-  const total = valid && settings ? settings.pricePerSlot * baseSlots * chosen.length : 0
+  const total = valid && settings ? orderTotal(courts, chosen, settings, baseSlots) : 0
   const chosenNames = courts.filter((c) => chosen.includes(c.id)).map((c) => c.name.replace('Court ', ''))
 
   const pickDate = (d) => { setDate(d); setStart(null) }
-  const pickDuration = (h) => setDur(h)
+  const pickDuration = (h) => setDurChoice(h)
   const pickStart = (i, el) => {
     setStart(start === i ? null : i)
     el?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' })
@@ -190,29 +196,33 @@ export default function BookPage() {
   const farDate = !stripDays.includes(effectiveDate)
   const visible = options.filter((o) => !o.hidden)
   const canConfirm = valid && chosen.length > 0
+  const price = hourlyRange(courts, settings)
 
   return (
     <>
-      {/* Hero */}
+      {/* Hero: the owner's banners when configured, otherwise the default hero. The facility name is in the header, so it is not repeated here. */}
+      {banners.length > 0 ? (
+        <BannerCarousel banners={banners} facilityName={settings.name} fallbackHeading={settings.tagline} onCta={() => document.getElementById('book')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
+      ) : (
       <section className="on-dark relative overflow-hidden bg-forest-900 text-white">
         {HERO_IMAGE_URL && <img src={HERO_IMAGE_URL} alt="" className="absolute inset-0 size-full object-cover opacity-25" />}
         <div className="container-page relative grid items-center gap-8 pb-20 pt-8 sm:pt-14 lg:grid-cols-[1.4fr_1fr] lg:pb-28">
           <div className="rise">
             <h1 className="text-[2.6rem] font-extrabold leading-[1.02] sm:text-6xl">{settings.tagline}</h1>
-            <p className="mt-3 font-display text-xl font-bold text-volt-400 sm:text-2xl">{settings.name}</p>
             <p className="mt-4 max-w-lg text-base text-white/75 sm:text-lg">Pick your duration and time, choose your courts, and pay online. Your booking is confirmed as soon as the payment is verified.</p>
             <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-white/80">
-              <li className="flex items-center gap-2"><MapPin className="size-4 text-volt-400" aria-hidden />{settings.address}</li>
+              <li className="flex items-center gap-2"><MapPin className="size-4 text-volt-400" aria-hidden />{[settings.address, settings.city].filter(Boolean).join(', ') || 'Address not set yet'}</li>
               <li className="flex items-center gap-2"><Clock className="size-4 text-volt-400" aria-hidden />{fmt12(settings.openingTime)} – {fmt12(settings.closingTime)} daily</li>
-              <li className="flex items-center gap-2"><Banknote className="size-4 text-volt-400" aria-hidden />{money(settings.pricePerSlot * slotsPerWindow)} per court / hour</li>
+              <li className="flex items-center gap-2"><Banknote className="size-4 text-volt-400" aria-hidden />{price.varies ? 'From ' : ''}{money(price.min)} per court / hour</li>
             </ul>
           </div>
           <CourtIllustration className="mx-auto hidden h-72 rotate-90 opacity-95 lg:block" />
         </div>
       </section>
+      )}
 
       {/* Booking widget — sections carry their own padding; dividers sit exactly between them */}
-      <div className="container-page relative z-10 -mt-16">
+      <div id="book" className="container-page relative z-10 -mt-16 scroll-mt-20">
         <div className="card min-w-0 divide-y divide-line">
           <Section step="1" title="Pick a date">
             {/* The 7 days scroll on small screens; the calendar button stays pinned at the end. */}
@@ -221,12 +231,13 @@ export default function BookPage() {
                 {stripDays.map((d) => {
                   const on = d === effectiveDate
                   const dt = new Date(`${d}T00:00:00`)
+                  const closed = isClosedDay(settings, d)
                   return (
-                    <button key={d} role="radio" aria-checked={on} onClick={() => pickDate(d)}
-                      className={`flex w-[3.75rem] shrink-0 snap-start flex-col items-center justify-center rounded-2xl border py-2.5 transition-all sm:w-auto sm:min-w-[3.75rem] sm:flex-1 ${on ? 'border-forest-900 bg-forest-900 text-white shadow-card' : 'border-line bg-white hover:border-forest-600'}`}>
+                    <button key={d} role="radio" aria-checked={on} disabled={closed} onClick={() => pickDate(d)} title={closed ? 'Closed' : undefined}
+                      className={`flex w-[3.75rem] disabled:cursor-not-allowed disabled:bg-paper disabled:opacity-60 shrink-0 snap-start flex-col items-center justify-center rounded-2xl border py-2.5 transition-all sm:w-auto sm:min-w-[3.75rem] sm:flex-1 ${on ? 'border-forest-900 bg-forest-900 text-white shadow-card' : 'border-line bg-white hover:border-forest-600'}`}>
                       <span className={`text-xs ${on ? 'text-volt-400' : 'text-muted'}`}>{d === today ? 'Today' : dt.toLocaleDateString('en-IN', { weekday: 'short' })}</span>
                       <span className="font-display text-xl font-bold leading-tight">{dt.getDate()}</span>
-                      <span className={`text-xs ${on ? 'text-white/70' : 'text-muted'}`}>{dt.toLocaleDateString('en-IN', { month: 'short' })}</span>
+                      <span className={`text-xs ${on ? 'text-white/70' : 'text-muted'}`}>{closed ? 'Closed' : dt.toLocaleDateString('en-IN', { month: 'short' })}</span>
                     </button>
                   )
                 })}
@@ -242,7 +253,7 @@ export default function BookPage() {
 
           <Section step="2" title="Choose Your Duration">
             <div className="grid grid-cols-4 gap-2 sm:flex sm:gap-2.5" role="radiogroup" aria-label="Duration">
-              {DURATIONS.map((h) => {
+              {offered.map((h) => {
                 const on = dur === h
                 const unavailable = h > maxHours
                 return (
@@ -319,7 +330,7 @@ export default function BookPage() {
                       {on ? <span className="grid size-6 place-items-center rounded-full bg-volt-400 text-forest-950"><Check className="size-4" strokeWidth={3} aria-hidden /><span className="sr-only">Selected</span></span> : neutral ? null : st.badge}
                     </div>
                     <p className={`mt-2 text-sm ${on ? 'text-white/75' : 'text-muted'}`}>
-                      {can ? (on ? 'Selected' : money(settings.pricePerSlot * baseSlots))
+                      {can ? (on ? 'Selected' : money(courtSlotPrice(court, settings) * baseSlots))
                         : state === 'pending' ? (mine ? 'Your unpaid hold' : 'Held while payment completes')
                         : state === 'booked' ? (mine ? 'Your confirmed booking' : 'Already booked')
                         : state === 'blocked' ? 'Maintenance / private use' : 'Not bookable'}
@@ -333,12 +344,14 @@ export default function BookPage() {
         </div>
       </div>
 
+      <FacilityDetails settings={settings} courts={courts} />
+
       {/* How it works */}
       <section className="container-page mt-10">
         <h2 className="text-2xl font-extrabold sm:text-3xl">How it works</h2>
         <div className="mt-5 grid gap-4 sm:grid-cols-3">
           {[
-            { icon: CalendarDays, t: 'Pick your time', d: 'Choose a date, how long you want to play (1–4 hours) and your start time, then your courts.' },
+            { icon: CalendarDays, t: 'Pick your time', d: 'Choose a date, how long you want to play and your start time, then your courts.' },
             { icon: CreditCard, t: 'Pay online', d: 'Log in with your email, then pay the total securely. Nothing is confirmed until the payment is verified.' },
             { icon: ShieldCheck, t: 'You’re booked', d: 'You get a booking reference straight away, and can find it any time in My Bookings.' },
           ].map(({ icon: Icon, t, d }) => (
@@ -386,7 +399,7 @@ export default function BookPage() {
         </div>
       </div>
 
-      <CalendarPopup open={calendarOpen} onClose={() => setCalendarOpen(false)} value={effectiveDate} min={today} max={maxDate} onPick={pickDate} />
+      <CalendarPopup open={calendarOpen} onClose={() => setCalendarOpen(false)} value={effectiveDate} min={today} max={maxDate} onPick={pickDate} isDisabled={(d) => isClosedDay(settings, d)} />
     </>
   )
 }

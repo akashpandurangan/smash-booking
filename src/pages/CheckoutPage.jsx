@@ -1,3 +1,4 @@
+import { courtSlotPrice, orderTotal } from '../lib/pricing.js'
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { AlertTriangle, CalendarDays, Clock, Info, MapPin, Pencil, UserRound } from 'lucide-react'
@@ -59,7 +60,7 @@ export default function CheckoutPage() {
   const picked = courts.filter((c) => draft.courtIds.includes(c.id))
   const minutes = bookingMinutes({ segments })
   const slotCount = minutes / settings.slotMinutes
-  const total = settings.pricePerSlot * slotCount * draft.courtIds.length
+  const total = orderTotal(courts, draft.courtIds, settings, slotCount)
 
   // Already logged in: use what the account/profile already knows, ask only for what is missing.
   const needName = !validName(user.name)
@@ -142,7 +143,9 @@ export default function CheckoutPage() {
             <DetailRow label="Facility">{settings.name}</DetailRow>
             <DetailRow label="Location"><span className="inline-flex items-center gap-1"><MapPin className="size-3.5" aria-hidden />{settings.address}</span></DetailRow>
             <DetailRow label="Duration">{fmtDuration(minutes)}</DetailRow>
-            <DetailRow label="Price">{money(settings.pricePerSlot)} × {slotCount} slot{slotCount > 1 ? 's' : ''} × {picked.length} court{picked.length > 1 ? 's' : ''}</DetailRow>
+            <DetailRow label="Price">{new Set(picked.map((c) => courtSlotPrice(c, settings))).size <= 1
+              ? <>{money(courtSlotPrice(picked[0], settings))} × {slotCount} slot{slotCount > 1 ? 's' : ''} × {picked.length} court{picked.length > 1 ? 's' : ''}</>
+              : <>{picked.map((c) => `${c.name} ${money(courtSlotPrice(c, settings))}`).join(' + ')} per slot × {slotCount} slot{slotCount > 1 ? 's' : ''}</>}</DetailRow>
             <DetailRow label="Total to pay"><span className="font-display text-lg font-extrabold">{money(total)}</span></DetailRow>
           </dl>
           {check.state === 'gone' && <p className="mt-3 flex items-center gap-2 text-sm text-red-700"><AlertTriangle className="size-4" aria-hidden />Your selection is no longer free.</p>}

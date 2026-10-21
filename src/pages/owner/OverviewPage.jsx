@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BadgeIndianRupee, CalendarCheck, CalendarClock, ChevronRight, ClipboardCheck, LayoutGrid, Undo2 } from 'lucide-react'
 import { useFacility } from '../../context/contexts.js'
-import { useAdmin } from './AdminLayout.jsx'
+import { useAdmin } from './OwnerLayout.jsx'
 import { bookingMinutes, fmtDate, fmtSegments, generateSlots, money, todayISO } from '../../lib/time.js'
 import { ACTIVE_STATUSES, PAYMENT_STATUS } from '../../lib/status.js'
 import { Badge, EmptyState, Skeleton, Stat, StatusBadge } from '../../components/ui.jsx'
 import BookingModal from './BookingModal.jsx'
+import BookingLinkCard from '../../components/BookingLinkCard.jsx'
 
 const courtsText = (b) => `Court${b.courtNumbers.length > 1 ? 's' : ''} ${b.courtNumbers.join(', ')}`
 
@@ -52,9 +53,11 @@ export default function OverviewPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-extrabold">Overview</h1>
+        <h1 className="text-3xl font-extrabold">Dashboard</h1>
         <p className="text-muted">{fmtDate(m.today, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
       </div>
+
+      <BookingLinkCard settings={settings} courts={courts} />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
         <Stat icon={CalendarClock} label="Today’s bookings" value={m.todays.length} hint="Active bookings today" />

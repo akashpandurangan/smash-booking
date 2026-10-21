@@ -3,6 +3,7 @@ import { History } from 'lucide-react'
 import { api } from '../../lib/api/index.js'
 import { friendlyError } from '../../lib/errors.js'
 import { fmtDateTime } from '../../lib/time.js'
+import { useFacility } from '../../context/contexts.js'
 import { Alert, EmptyState, Skeleton } from '../../components/ui.jsx'
 
 const LABEL = {
@@ -18,12 +19,21 @@ const LABEL = {
   order_created_manually: 'Created booking manually',
   refund_recorded: 'Recorded a refund',
   settings_updated: 'Updated settings',
+  facility_created: 'Created the facility',
+  facility_updated: 'Updated facility settings',
+  payments_connected: 'Connected Razorpay',
+  payments_disconnected: 'Disconnected Razorpay',
+  platform_status_suspended: 'Suspended by platform admin',
+  platform_status_active: 'Activated by platform admin',
+  platform_slug_changed: 'Web address changed by platform admin',
+  platform_limits_changed: 'Limits changed by platform admin',
 }
 
 export default function ActivityPage() {
+  const { settings } = useFacility()
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
-  useEffect(() => { api.admin.listAudit().then(setRows).catch((e) => setError(friendlyError(e))) }, [])
+  useEffect(() => { api.admin.listAudit(settings.id).then(setRows).catch((e) => setError(friendlyError(e))) }, [settings.id])
 
   return (
     <div className="space-y-5">

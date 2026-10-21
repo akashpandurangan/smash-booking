@@ -6,12 +6,12 @@ const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 
 /** Month-grid date picker in a sheet. Days outside [min, max] are disabled. */
-export default function CalendarPopup({ open, onClose, value, min, max, onPick }) {
+export default function CalendarPopup({ open, onClose, value, min, max, onPick, isDisabled }) {
   if (!open) return null
-  return <Inner onClose={onClose} value={value} min={min} max={max} onPick={onPick} />
+  return <Inner onClose={onClose} value={value} min={min} max={max} onPick={onPick} isDisabled={isDisabled} />
 }
 
-function Inner({ onClose, value, min, max, onPick }) {
+function Inner({ onClose, value, min, max, onPick, isDisabled }) {
   const [ym, setYm] = useState(() => ({ y: Number(value.slice(0, 4)), m: Number(value.slice(5, 7)) }))
   const first = new Date(Date.UTC(ym.y, ym.m - 1, 1))
   const offset = (first.getUTCDay() + 6) % 7 // Monday-first
@@ -38,7 +38,7 @@ function Inner({ onClose, value, min, max, onPick }) {
         {cells.map((d, i) => {
           if (!d) return <span key={`e${i}`} />
           const id = iso(ym.y, ym.m, d)
-          const disabled = id < min || id > max
+          const disabled = id < min || id > max || !!isDisabled?.(id)
           const on = id === value
           return (
             <button key={id} role="gridcell" disabled={disabled} aria-selected={on} aria-label={new Date(`${id}T00:00:00`).toDateString()}
@@ -49,7 +49,7 @@ function Inner({ onClose, value, min, max, onPick }) {
           )
         })}
       </div>
-      <p className="mt-3 text-center text-xs text-muted">Bookings open for today and the next 13 days.</p>
+      <p className="mt-3 text-center text-xs text-muted">Struck-through dates are unavailable (past, closed or outside the booking window).</p>
     </Modal>
   )
 }

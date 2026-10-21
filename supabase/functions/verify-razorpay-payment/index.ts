@@ -1,13 +1,11 @@
 // Verifies a Razorpay checkout result server-side, then confirms the booking.
-// A booking is confirmed ONLY if (1) the HMAC signature is valid AND (2) Razorpay's own API
-// reports a captured payment for the right order and amount.
-import { basicAuth, cors, hmacHex, json, razorpayCreds, requireUser, safeEqual, serviceClient } from '../_shared/razorpay.ts'
+// A booking is confirmed ONLY if (1) the HMAC signature (made with THIS facility's secret) is valid
+// AND (2) Razorpay's own API reports a captured payment for the right order and amount.
+import { basicAuth, cors, facilityCreds, hmacHex, json, requireUser, safeEqual, serviceClient } from '../_shared/razorpay.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
-    const creds = razorpayCreds()
-    if (!creds) return json({ error: 'razorpay_not_configured' }, 503)
     const user = await requireUser(req)
     if (!user) return json({ error: 'not_authenticated' }, 401)
 
@@ -18,6 +16,9 @@ Deno.serve(async (req) => {
     const { data: order } = await db.from('orders').select('*').eq('id', orderId).maybeSingle()
     if (!order || order.user_id !== user.id) return json({ error: 'booking_not_found' }, 404)
     if (order.razorpay_order_id !== razorpay_order_id) return json({ error: 'razorpay_order_mismatch' }, 400)
+
+    const creds = await facilityCreds(db, order.facility_id)
+    if (!creds) return json({ error: 'razorpay_not_configured' }, 503)
 
     // 1. signature
     const expected = await hmacHex(creds.keySecret, `${razorpay_order_id}|${razorpay_payment_id}`)

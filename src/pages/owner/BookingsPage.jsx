@@ -4,9 +4,9 @@ import { useFacility, useToast } from '../../context/contexts.js'
 import { api } from '../../lib/api/index.js'
 import { friendlyError } from '../../lib/errors.js'
 import { PAYMENT_STATUS, STATUS } from '../../lib/status.js'
-import { addDays, fmt12, fmtDate, fmtDuration, fmtRange, fromMin, generateSlots, money, toMin, todayISO, fmtSegments } from '../../lib/time.js'
+import { addDays, fmt12, fmtDate, fmtDuration, fromMin, generateSlots, money, toMin, todayISO, fmtSegments } from '../../lib/time.js'
 import { Alert, Badge, Button, EmptyState, Field, Modal, Skeleton, StatusBadge } from '../../components/ui.jsx'
-import { useAdmin } from './AdminLayout.jsx'
+import { useAdmin } from './OwnerLayout.jsx'
 import BookingModal from './BookingModal.jsx'
 
 export default function BookingsPage() {
@@ -130,7 +130,7 @@ function ManualForm({ onClose, onCreated }) {
     if (Object.keys(v).length) return
     setBusy(true); setErr('')
     try {
-      await api.admin.createBooking({ courtIds: form.courtIds, date: form.date, segments: [{ start: form.start, end }], name: form.name.trim(), phone: form.phone.replace(/\D/g, ''), email: form.email.trim(), confirm: form.confirm, note: form.note.trim() })
+      await api.admin.createBooking({ facilityId: settings.id, courtIds: form.courtIds, date: form.date, segments: [{ start: form.start, end }], name: form.name.trim(), phone: form.phone.replace(/\D/g, ''), email: form.email.trim(), confirm: form.confirm, note: form.note.trim() })
       toast('Booking created')
       onCreated()
     } catch (x) { setErr(friendlyError(x)) } finally { setBusy(false) }

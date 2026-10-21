@@ -1,4 +1,7 @@
 // Shared helpers for the Razorpay Edge Functions (Deno runtime).
+// MULTI-TENANT: every facility brings its OWN Razorpay account. Credentials are read from
+// `facility_payment_config` (service role only) using the facility id of the ORDER being paid,
+// so one facility's customers can never pay into another facility's account.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
 
 export const cors = {
@@ -9,15 +12,18 @@ export const cors = {
 export const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 
-/** Secrets are set with `supabase secrets set` — they are never shipped to the browser. */
-export const razorpayCreds = () => {
-  const keyId = Deno.env.get('RAZORPAY_KEY_ID')
-  const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET')
-  return keyId && keySecret ? { keyId, keySecret } : null
-}
-
 export const serviceClient = () =>
   createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+
+export type Creds = { keyId: string; keySecret: string; webhookSecret: string | null }
+
+/** The Razorpay credentials of ONE facility (null if the owner has not configured payments). */
+export async function facilityCreds(db: ReturnType<typeof serviceClient>, facilityId: string): Promise<Creds | null> {
+  const { data } = await db.from('facility_payment_config')
+    .select('razorpay_key_id, razorpay_key_secret, webhook_secret').eq('facility_id', facilityId).maybeSingle()
+  if (!data) return null
+  return { keyId: data.razorpay_key_id, keySecret: data.razorpay_key_secret, webhookSecret: data.webhook_secret }
+}
 
 /** Resolve the logged-in user from the request's JWT. */
 export async function requireUser(req: Request) {

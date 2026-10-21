@@ -87,6 +87,14 @@ export function money(n) {
   return '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 2 })
 }
 
+export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+/** Closed on a weekly day off or a listed holiday (iso = YYYY-MM-DD). */
+export function isClosedDay(settings, iso) {
+  const dow = new Date(`${iso}T00:00:00`).getDay()
+  return (settings.closedWeekdays || []).includes(dow) || (settings.holidays || []).includes(iso)
+}
+
 /** True once the booking's end time has passed in the facility timezone. */
 export function isPast(b, tz) {
   const today = todayISO(tz)
